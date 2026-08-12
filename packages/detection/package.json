@@ -1,0 +1,11 @@
+{
+  "name": "@ai-radar/detection",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "dependencies": {
+    "@ai-radar/crawler": "workspace:*",
+    "@ai-radar/shared": "workspace:*"
+  }
+}

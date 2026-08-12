@@ -1,0 +1,23 @@
+{
+  "name": "ai-radar",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "db:generate": "cd packages/db && bun run generate",
+    "db:migrate": "cd packages/db && bun run migrate",
+    "db:studio": "cd packages/db && bun run studio",
+    "db:seed": "bun run apps/worker/src/seed.ts",
+    "worker": "bun run apps/worker/src/index.ts",
+    "worker:once": "bun run apps/worker/src/index.ts --once",
+    "api": "bun run apps/api/src/index.ts",
+    "web": "bun --cwd apps/web run dev",
+    "typecheck": "tsc -b tsconfig.base.json"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.1.14",
+    "typescript": "^5.7.3"
+  }
+}

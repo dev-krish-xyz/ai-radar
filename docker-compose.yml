@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ai_radar
+      POSTGRES_PASSWORD: ai_radar
+      POSTGRES_DB: ai_radar
+    ports:
+      - "5433:5432"
+    volumes:
+      - ai_radar_pg:/var/lib/postgresql/data
+
+volumes:
+  ai_radar_pg:

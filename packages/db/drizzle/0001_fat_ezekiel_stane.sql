@@ -1,0 +1,1 @@
+ALTER TABLE "signals" ADD COLUMN "suggested_event_type" "event_type" NOT NULL;

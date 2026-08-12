@@ -1,0 +1,17 @@
+{
+  "name": "@ai-radar/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/index.ts"
+  },
+  "dependencies": {
+    "@ai-radar/crawler": "workspace:*",
+    "@ai-radar/db": "workspace:*",
+    "@ai-radar/detection": "workspace:*",
+    "@ai-radar/providers": "workspace:*",
+    "@ai-radar/shared": "workspace:*",
+    "drizzle-orm": "^0.38.3"
+  }
+}
