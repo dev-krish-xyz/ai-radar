@@ -147,6 +147,12 @@ export async function processSource(source: SourceRow, provider: ProviderRow): P
   }
 
   if (allSignals.length === 0) {
+    const addedPreview = lineDiff.added.slice(0, 5).map((l) => `+ ${l}`);
+    const removedPreview = lineDiff.removed.slice(0, 5).map((l) => `- ${l}`);
+    console.log(
+      `[diff] ${source.name} (${lineDiff.added.length} added / ${lineDiff.removed.length} removed, no rule/LLM signal):\n` +
+        [...addedPreview, ...removedPreview].join("\n"),
+    );
     return { sourceId: source.id, status: "changed", signalsCreated: 0 };
   }
 
