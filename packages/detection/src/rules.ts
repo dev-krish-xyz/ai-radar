@@ -271,8 +271,12 @@ function detectSdkVersionSignals(ctx: DetectionContext, jsonDiff: JsonDiff, now:
   );
 }
 
+/** A single-line diff this long is prose (a post title, a caption), not a counter/version bump. */
+const SUBSTANTIAL_SINGLE_LINE_CHARS = 40;
+
 /** True when a diff has enough substance to be worth an LLM semantic-significance check. */
 export function needsSemanticReview(lineDiff: LineDiff, alreadyFiredRuleSignals: number): boolean {
   if (alreadyFiredRuleSignals > 0) return false;
-  return lineDiff.added.length >= 2 || lineDiff.removed.length >= 2;
+  if (lineDiff.added.length >= 2 || lineDiff.removed.length >= 2) return true;
+  return [...lineDiff.added, ...lineDiff.removed].some((l) => l.length >= SUBSTANTIAL_SINGLE_LINE_CHARS);
 }
