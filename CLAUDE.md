@@ -18,7 +18,7 @@ apps/
   worker/   crawl loop + detection pipeline + Telegram alerts
 packages/
   db/          Drizzle schema + client (providers, sources, snapshots, signals, events, event_signals)
-  shared/      cross-cutting types, env loader, Telegram sender, Anthropic LLM classifier
+  shared/      cross-cutting types, env loader, Telegram sender, Groq LLM classifier
   providers/   the provider/source registry (this is what you edit to add sources)
   crawler/     HTTP fetch (ETag/retry/rate-limit), HTML/JSON extraction, hashing, diffing
   detection/   rule-based signal detectors, confidence/importance scoring, correlation, alert formatting
@@ -41,9 +41,12 @@ packages/
    releases, announcement copy. Cheap and runs on every diff.
 5. **LLM fallback** (`detection/rules.ts: needsSemanticReview` +
    `shared/llm.ts: classifyDiffSignificance`) — only called when a diff has
-   substance (2+ added/removed lines) *and* no deterministic rule already fired.
-   Calls Claude with a tool-forced JSON schema; output is validated before it can
-   become a signal, so free-form LLM text can never trigger anything directly.
+   substance (2+ added/removed lines, or any single line ≥40 chars — extraction
+   can flatten a page into one dense line, so a single-line character-length
+   check catches real prose changes a line-count-only gate would miss) *and* no
+   deterministic rule already fired. Calls Groq (`llama-3.3-70b-versatile`) with
+   a tool-forced JSON schema; output is validated before it can become a signal,
+   so free-form LLM text can never trigger anything directly.
 6. **CORRELATION** (`apps/worker/correlate.ts` + `detection/correlation.ts`) —
    every uncorrelated signal is matched against open `PRE_ANNOUNCEMENT` events for
    the same provider (by entity match, else title/description token-overlap ≥
@@ -72,7 +75,7 @@ was no pre-announcement to speak of.
 ```bash
 bun install                 # install all workspace deps
 docker compose up -d        # start Postgres (localhost:5433)
-cp .env.example .env         # fill in DATABASE_URL / TELEGRAM_* / ANTHROPIC_API_KEY
+cp .env.example .env         # fill in DATABASE_URL / TELEGRAM_* / GROQ_API_KEY
 
 bun run db:generate         # generate a drizzle migration after schema.ts changes
 bun run db:migrate          # apply migrations

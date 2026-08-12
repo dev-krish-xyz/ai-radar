@@ -19,8 +19,8 @@ export const env = {
   get telegramChatId() {
     return optional("TELEGRAM_CHAT_ID");
   },
-  get anthropicApiKey() {
-    return optional("ANTHROPIC_API_KEY");
+  get groqApiKey() {
+    return optional("GROQ_API_KEY");
   },
   get crawlerUserAgent() {
     return (

@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import Groq from "groq-sdk";
 import { env } from "./env";
 import { EVENT_TYPES, type EventType } from "./types";
 
@@ -22,12 +22,13 @@ export interface DiffClassification {
 }
 
 const TOOL_NAME = "emit_classification";
+const MODEL = "llama-3.3-70b-versatile";
 
-let client: Anthropic | null = null;
-function getClient(): Anthropic | null {
-  const apiKey = env.anthropicApiKey;
+let client: Groq | null = null;
+function getClient(): Groq | null {
+  const apiKey = env.groqApiKey;
   if (!apiKey) return null;
-  if (!client) client = new Anthropic({ apiKey });
+  if (!client) client = new Groq({ apiKey });
   return client;
 }
 
@@ -41,59 +42,72 @@ function getClient(): Anthropic | null {
 export async function classifyDiffSignificance(
   input: DiffClassificationInput,
 ): Promise<DiffClassification | null> {
-  const anthropic = getClient();
-  if (!anthropic) {
-    console.warn("[llm] ANTHROPIC_API_KEY not set, skipping semantic classification");
+  const groq = getClient();
+  if (!groq) {
+    console.warn("[llm] GROQ_API_KEY not set, skipping semantic classification");
     return null;
   }
 
-  const message = await anthropic.messages.create({
-    model: "claude-sonnet-5",
+  const completion = await groq.chat.completions.create({
+    model: MODEL,
     max_tokens: 1024,
-    system:
-      "You are a filter inside an AI product-release monitoring pipeline. You are shown a diff " +
-      "of what changed on an official AI provider source (blog, docs, changelog, model catalog, " +
-      "API reference, pricing page, GitHub repo, or SDK). Decide if the change is a MEANINGFUL " +
-      "product signal: new model/model ID, model preview, availability change, capability change, " +
-      "new API endpoint, major API change, new dev feature, major product feature, pricing change, " +
-      "context-window change, major SDK change, important GitHub change, new AI product/tool, or " +
-      "deprecation/migration. Mark significant=false for typos, formatting, navigation, wording, " +
-      "tracking/analytics, generated-file noise, or unimportant commits. Always call the " +
-      `${TOOL_NAME} tool with your answer, never respond in free text.`,
-    tools: [
-      {
-        name: TOOL_NAME,
-        description: "Emit a structured classification of the diff.",
-        input_schema: {
-          type: "object",
-          properties: {
-            significant: { type: "boolean" },
-            event_type: { type: "string", enum: [...EVENT_TYPES] },
-            title: { type: "string", description: "Short human title, e.g. 'Possible new Claude model'" },
-            summary: { type: "string", description: "1-3 sentence summary of what changed and why it matters" },
-            entity: { type: ["string", "null"], description: "Model/product name or ID if identifiable, else null" },
-            importance: { type: "integer", minimum: 1, maximum: 10 },
-            confidence: { type: "number", minimum: 0, maximum: 1 },
-          },
-          required: ["significant", "event_type", "title", "summary", "entity", "importance", "confidence"],
-        },
-      },
-    ],
-    tool_choice: { type: "tool", name: TOOL_NAME },
     messages: [
+      {
+        role: "system",
+        content:
+          "You are a filter inside an AI product-release monitoring pipeline. You are shown a diff " +
+          "of what changed on an official AI provider source (blog, docs, changelog, model catalog, " +
+          "API reference, pricing page, GitHub repo, or SDK). Decide if the change is a MEANINGFUL " +
+          "product signal: new model/model ID, model preview, availability change, capability change, " +
+          "new API endpoint, major API change, new dev feature, major product feature, pricing change, " +
+          "context-window change, major SDK change, important GitHub change, new AI product/tool, or " +
+          "deprecation/migration. Mark significant=false for typos, formatting, navigation, wording, " +
+          "tracking/analytics, generated-file noise, or unimportant commits. Always call the " +
+          `${TOOL_NAME} tool with your answer, never respond in free text.`,
+      },
       {
         role: "user",
         content: `Provider: ${input.providerName}\nSource: ${input.sourceName} (${input.sourceType})\nURL: ${input.sourceUrl}\n\nDiff:\n${input.diffExcerpt}`,
       },
     ],
+    tools: [
+      {
+        type: "function",
+        function: {
+          name: TOOL_NAME,
+          description: "Emit a structured classification of the diff.",
+          parameters: {
+            type: "object",
+            properties: {
+              significant: { type: "boolean" },
+              event_type: { type: "string", enum: [...EVENT_TYPES] },
+              title: { type: "string", description: "Short human title, e.g. 'Possible new Claude model'" },
+              summary: { type: "string", description: "1-3 sentence summary of what changed and why it matters" },
+              entity: { type: ["string", "null"], description: "Model/product name or ID if identifiable, else null" },
+              importance: { type: "integer", minimum: 1, maximum: 10 },
+              confidence: { type: "number", minimum: 0, maximum: 1 },
+            },
+            required: ["significant", "event_type", "title", "summary", "entity", "importance", "confidence"],
+          },
+        },
+      },
+    ],
+    tool_choice: { type: "function", function: { name: TOOL_NAME } },
   });
 
-  const toolUse = message.content.find(
-    (block): block is Anthropic.ToolUseBlock => block.type === "tool_use" && block.name === TOOL_NAME,
+  const toolCall = completion.choices[0]?.message?.tool_calls?.find(
+    (t) => t.type === "function" && t.function.name === TOOL_NAME,
   );
-  if (!toolUse) return null;
+  if (!toolCall || toolCall.type !== "function") return null;
 
-  return parseAndValidate(toolUse.input);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(toolCall.function.arguments);
+  } catch {
+    return null;
+  }
+
+  return parseAndValidate(parsed);
 }
 
 function parseAndValidate(raw: unknown): DiffClassification | null {
