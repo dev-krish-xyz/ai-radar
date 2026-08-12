@@ -5,7 +5,7 @@ export const qwen: ProviderConfig = {
   name: "Qwen",
   tier: "tier2",
   priority: 55,
-  enabled: false,
+  enabled: true,
   sources: [
     { name: "Qwen Blog", url: "https://qwenlm.github.io/blog/", type: "blog" },
     { name: "Qwen2.5 releases", url: "https://github.com/QwenLM/Qwen2.5/releases", type: "github_releases" },

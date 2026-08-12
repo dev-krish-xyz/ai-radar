@@ -5,7 +5,7 @@ export const mistral: ProviderConfig = {
   name: "Mistral",
   tier: "tier2",
   priority: 55,
-  enabled: false,
+  enabled: true,
   sources: [
     { name: "News", url: "https://mistral.ai/news", type: "blog" },
     { name: "Model Catalog", url: "https://docs.mistral.ai/getting-started/models/models_overview/", type: "model_catalog" },

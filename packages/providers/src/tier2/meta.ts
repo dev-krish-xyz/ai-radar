@@ -5,7 +5,7 @@ export const meta: ProviderConfig = {
   name: "Meta / Llama",
   tier: "tier2",
   priority: 50,
-  enabled: false,
+  enabled: true,
   sources: [
     { name: "Meta AI Blog", url: "https://ai.meta.com/blog/", type: "blog" },
     { name: "Llama Docs", url: "https://www.llama.com/docs/model-cards-and-prompt-formats/", type: "docs" },
