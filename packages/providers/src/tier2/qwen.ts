@@ -9,6 +9,8 @@ export const qwen: ProviderConfig = {
   sources: [
     { name: "Qwen Blog", url: "https://qwenlm.github.io/blog/", type: "blog" },
     { name: "Qwen2.5 releases", url: "https://github.com/QwenLM/Qwen2.5/releases", type: "github_releases" },
+    { name: "Qwen3 releases", url: "https://github.com/QwenLM/Qwen3/releases", type: "github_releases" },
     { name: "PyPI: dashscope", url: "https://pypi.org/pypi/dashscope/json", type: "sdk_pypi" },
+    { name: "Hugging Face: Qwen", url: "https://huggingface.co/Qwen", type: "product_page" },
   ],
 };

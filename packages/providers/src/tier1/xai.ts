@@ -15,5 +15,6 @@ export const xai: ProviderConfig = {
     { name: "grok-1 releases", url: "https://github.com/xai-org/grok-1/releases", type: "github_releases" },
     { name: "PyPI: xai-sdk", url: "https://pypi.org/pypi/xai-sdk/json", type: "sdk_pypi" },
     { name: "npm: xai-sdk", url: "https://registry.npmjs.org/xai-sdk", type: "sdk_npm" },
+    { name: "Function Calling Guide", url: "https://docs.x.ai/developers/tools/function-calling", type: "docs" },
   ],
 };

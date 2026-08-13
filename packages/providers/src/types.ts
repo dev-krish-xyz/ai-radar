@@ -2,17 +2,17 @@ import type { ProviderTier, SourceType } from "@ai-radar/shared";
 
 /** Crawl cadence bands per the spec: registries fastest, pricing slowest. */
 export const CRAWL_INTERVALS: Record<SourceType, number> = {
-  model_catalog: 12,
-  api_reference: 12,
-  docs: 30,
-  changelog: 30,
-  blog: 30,
-  product_page: 30,
-  github_repo: 45,
-  github_releases: 45,
-  sdk_npm: 45,
-  sdk_pypi: 45,
-  pricing: 90,
+  model_catalog: 10,
+  api_reference: 10,
+  docs: 15,
+  changelog: 15,
+  blog: 15,
+  product_page: 15,
+  github_repo: 20,
+  github_releases: 20,
+  sdk_npm: 20,
+  sdk_pypi: 20,
+  pricing: 60,
   social: 60,
 };
 

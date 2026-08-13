@@ -15,5 +15,7 @@ export const openai: ProviderConfig = {
     { name: "openai-node releases", url: "https://github.com/openai/openai-node/releases", type: "github_releases" },
     { name: "npm: openai", url: "https://registry.npmjs.org/openai", type: "sdk_npm" },
     { name: "PyPI: openai", url: "https://pypi.org/pypi/openai/json", type: "sdk_pypi" },
+    { name: "openai-agents-python releases", url: "https://github.com/openai/openai-agents-python/releases", type: "github_releases" },
+    { name: "Realtime API Guide", url: "https://developers.openai.com/api/docs/guides/realtime", type: "docs" },
   ],
 };

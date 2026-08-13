@@ -15,5 +15,7 @@ export const anthropic: ProviderConfig = {
     { name: "anthropic-sdk-typescript releases", url: "https://github.com/anthropics/anthropic-sdk-typescript/releases", type: "github_releases" },
     { name: "npm: @anthropic-ai/sdk", url: "https://registry.npmjs.org/@anthropic-ai/sdk", type: "sdk_npm" },
     { name: "PyPI: anthropic", url: "https://pypi.org/pypi/anthropic/json", type: "sdk_pypi" },
+    { name: "anthropic-sdk-go releases", url: "https://github.com/anthropics/anthropic-sdk-go/releases", type: "github_releases" },
+    { name: "Computer Use Guide", url: "https://docs.claude.com/en/docs/build-with-claude/computer-use", type: "docs" },
   ],
 };

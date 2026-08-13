@@ -12,5 +12,8 @@ export const mistral: ProviderConfig = {
     { name: "Pricing", url: "https://mistral.ai/pricing", type: "pricing" },
     { name: "client-python releases", url: "https://github.com/mistralai/client-python/releases", type: "github_releases" },
     { name: "PyPI: mistralai", url: "https://pypi.org/pypi/mistralai/json", type: "sdk_pypi" },
+    { name: "mistral-common releases", url: "https://github.com/mistralai/mistral-common/releases", type: "github_releases" },
+    { name: "npm: @mistralai/mistralai", url: "https://registry.npmjs.org/@mistralai/mistralai", type: "sdk_npm" },
+    { name: "Hugging Face: mistralai", url: "https://huggingface.co/mistralai", type: "product_page" },
   ],
 };

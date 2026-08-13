@@ -98,7 +98,7 @@ Edit `packages/providers/src/tier1/*.ts` (or `tier2/*.ts`), then run
 `bun run db:seed` — it upserts by `(providerId, url)`, so re-running is safe.
 Each `SourceConfig` needs a `type` (drives both detection rules and default crawl
 cadence — see `CRAWL_INTERVALS` in `packages/providers/src/types.ts`: registries
-~12min, docs/changelogs 30min, GitHub/SDKs 45min, pricing 90min).
+~10min, docs/changelogs 15min, GitHub/SDKs 20min, pricing 60min).
 
 Tier 2 providers are seeded but `enabled: false` on both the provider and
 implicitly its sources — flip `enabled: true` in the provider config once Tier 1

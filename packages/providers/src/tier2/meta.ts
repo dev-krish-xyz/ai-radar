@@ -11,5 +11,6 @@ export const meta: ProviderConfig = {
     { name: "Llama Docs", url: "https://www.llama.com/docs/model-cards-and-prompt-formats/", type: "docs" },
     { name: "llama-models releases", url: "https://github.com/meta-llama/llama-models/releases", type: "github_releases" },
     { name: "Hugging Face: meta-llama", url: "https://huggingface.co/meta-llama", type: "product_page" },
+    { name: "llama-stack releases", url: "https://github.com/meta-llama/llama-stack/releases", type: "github_releases" },
   ],
 };
