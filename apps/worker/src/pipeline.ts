@@ -15,6 +15,9 @@ type ProviderRow = typeof providersTable.$inferSelect;
 
 const MAX_LLM_DIFF_CHARS = 4000;
 
+/** Below this, treat extraction as a fetch glitch (empty JS-shell response) rather than real content. */
+const MIN_CONTENT_CHARS = 20;
+
 export interface ProcessResult {
   sourceId: number;
   status: "unchanged" | "changed" | "not_modified" | "first_snapshot" | "error";
@@ -50,6 +53,17 @@ export async function processSource(source: SourceRow, provider: ProviderRow): P
   const contentIsJson = isJsonContentType(fetchResult.contentType);
   const extracted = extractContent(body, fetchResult.contentType);
   const contentHash = hashContent(extracted);
+
+  if (extracted.length < MIN_CONTENT_CHARS) {
+    // Some client-rendered doc pages intermittently serve an empty shell instead of
+    // prerendered HTML — a same-host, same-status blip, not a real content change.
+    // Diffing against it would flap the whole page as added/removed on the next real fetch.
+    await db
+      .update(sourcesTable)
+      .set({ lastCrawledAt: now, lastStatus: `error: empty extraction (${extracted.length} chars)` })
+      .where(eq(sourcesTable.id, source.id));
+    return { sourceId: source.id, status: "error", signalsCreated: 0, error: "empty extraction" };
+  }
 
   await db
     .update(sourcesTable)
