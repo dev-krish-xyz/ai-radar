@@ -12,6 +12,17 @@ const STOPWORDS = new Set([
   "was", "were", "be", "new", "detected", "change", "changed",
 ]);
 
+/** Match `Qwen/Qwen3.8-27B` to `Qwen3.8-27B` so HF + catalog don't fork events. */
+function entitiesMatch(a: string, b: string): boolean {
+  const x = a.toLowerCase();
+  const y = b.toLowerCase();
+  if (x === y) return true;
+  const tail = (s: string) => (s.includes("/") ? s.slice(s.lastIndexOf("/") + 1) : s);
+  const tx = tail(x);
+  const ty = tail(y);
+  return tx.length >= 5 && tx === ty;
+}
+
 function tokenize(text: string): Set<string> {
   return new Set(
     text
@@ -51,7 +62,7 @@ export function findMatchingEvent(
 
   if (signal.entity) {
     const entityMatch = open
-      .filter((e) => e.entity && e.entity.toLowerCase() === signal.entity!.toLowerCase())
+      .filter((e) => e.entity && entitiesMatch(e.entity, signal.entity!))
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())[0];
     if (entityMatch) return entityMatch;
   }

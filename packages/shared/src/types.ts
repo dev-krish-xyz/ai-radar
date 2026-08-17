@@ -71,8 +71,56 @@ export const SIGNAL_CONFIDENCE_WEIGHTS: Record<SignalType, number> = {
   other: 10,
 };
 
+/** Classic multi-source corroboration bar. */
 export const ALERT_CONFIDENCE_THRESHOLD = 60;
 export const ALERT_IMPORTANCE_THRESHOLD = 6;
+
+/**
+ * Early single-signal bar. Max deterministic weight for a single signal type is 40
+ * (new_model_id), so a hard conf≥60 gate made it *impossible* to alert on a lone
+ * model launch / product signal — exactly the early edge this system exists for.
+ */
+export const ALERT_EARLY_IMPORTANCE_MIN = 8;
+export const ALERT_EARLY_CONFIDENCE_MIN = 35;
+
+/** Mid-tier single-signal bar (pricing, deprecation, availability with solid weight). */
+export const ALERT_SOLID_CONFIDENCE_MIN = 40;
+
+/**
+ * Official blog/product confirmation. LLM classifications often land at conf 15–25
+ * after weight scaling — still worth paging if the source is an official channel.
+ */
+export const ALERT_OFFICIAL_CONFIDENCE_MIN = 15;
+
+export interface AlertGateOptions {
+  /** True when a blog/product_page signal contributed, or the event is CONFIRMED. */
+  official?: boolean;
+}
+
+/**
+ * Alert gate:
+ *  1. High-confidence corroboration (conf≥60 && imp≥6)
+ *  2. Early high-importance (imp≥8 && conf≥35) — model launches, new products
+ *  3. Solid mid-tier (imp≥6 && conf≥40) — pricing/capability with real weight
+ *  4. Official-channel (imp≥6 && conf≥15 && official) — Daybreak-class blog news
+ */
+export function meetsAlertThreshold(
+  confidence: number,
+  importance: number,
+  opts: AlertGateOptions = {},
+): boolean {
+  if (confidence >= ALERT_CONFIDENCE_THRESHOLD && importance >= ALERT_IMPORTANCE_THRESHOLD) return true;
+  if (importance >= ALERT_EARLY_IMPORTANCE_MIN && confidence >= ALERT_EARLY_CONFIDENCE_MIN) return true;
+  if (importance >= ALERT_IMPORTANCE_THRESHOLD && confidence >= ALERT_SOLID_CONFIDENCE_MIN) return true;
+  if (
+    opts.official &&
+    importance >= ALERT_IMPORTANCE_THRESHOLD &&
+    confidence >= ALERT_OFFICIAL_CONFIDENCE_MIN
+  ) {
+    return true;
+  }
+  return false;
+}
 
 export function confidenceLabel(confidence: number): "Low" | "Medium" | "High" | "Very High" {
   if (confidence >= 80) return "Very High";

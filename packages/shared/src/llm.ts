@@ -22,7 +22,8 @@ export interface DiffClassification {
 }
 
 const TOOL_NAME = "emit_classification";
-const MODEL = "llama-3.3-70b-versatile";
+/** Groq decommissioned llama-3.3-70b-versatile; gpt-oss-120b is a strong free-tier replacement. */
+const MODEL = "openai/gpt-oss-120b";
 
 let client: Groq | null = null;
 function getClient(): Groq | null {

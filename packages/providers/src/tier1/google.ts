@@ -18,5 +18,6 @@ export const google: ProviderConfig = {
     { name: "npm: @google/genai", url: "https://registry.npmjs.org/@google/genai", type: "sdk_npm" },
     { name: "PyPI: google-genai", url: "https://pypi.org/pypi/google-genai/json", type: "sdk_pypi" },
     { name: "Vertex Live API Overview", url: "https://docs.cloud.google.com/vertex-ai/generative-ai/docs/live-api", type: "docs" },
+    { name: "gemini-cli commits", url: "https://github.com/google-gemini/gemini-cli", type: "github_repo" },
   ],
 };

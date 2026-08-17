@@ -1,19 +1,23 @@
 import type { ProviderTier, SourceType } from "@ai-radar/shared";
 
-/** Crawl cadence bands per the spec: registries fastest, pricing slowest. */
+/**
+ * Crawl cadence (minutes). Tuned for early detection:
+ * catalogs/changelogs/blogs first (where model launches surface), then GitHub/SDK,
+ * pricing slowest (changes rarely and is noisier).
+ */
 export const CRAWL_INTERVALS: Record<SourceType, number> = {
-  model_catalog: 10,
-  api_reference: 10,
-  docs: 15,
-  changelog: 15,
-  blog: 15,
-  product_page: 15,
-  github_repo: 20,
-  github_releases: 20,
-  sdk_npm: 20,
-  sdk_pypi: 20,
-  pricing: 60,
-  social: 60,
+  model_catalog: 5,
+  api_reference: 5,
+  changelog: 5,
+  blog: 5,
+  product_page: 10,
+  docs: 10,
+  github_repo: 10,
+  github_releases: 10,
+  sdk_npm: 10,
+  sdk_pypi: 10,
+  pricing: 30,
+  social: 5,
 };
 
 export interface SourceConfig {

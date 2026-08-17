@@ -13,7 +13,10 @@
     "worker": "bun run apps/worker/src/index.ts",
     "worker:once": "bun run apps/worker/src/index.ts --once",
     "api": "bun run apps/api/src/index.ts",
-    "web": "bun --cwd apps/web run dev",
+    "web": "bun run --cwd apps/web dev",
+    "up": "bun run scripts/supervise.ts",
+    "up:web": "bun run scripts/supervise.ts --web",
+    "install:launchd": "bash scripts/install-launchd.sh",
     "typecheck": "tsc -b tsconfig.base.json"
   },
   "devDependencies": {

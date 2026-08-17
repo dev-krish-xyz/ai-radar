@@ -14,6 +14,6 @@ export const mistral: ProviderConfig = {
     { name: "PyPI: mistralai", url: "https://pypi.org/pypi/mistralai/json", type: "sdk_pypi" },
     { name: "mistral-common releases", url: "https://github.com/mistralai/mistral-common/releases", type: "github_releases" },
     { name: "npm: @mistralai/mistralai", url: "https://registry.npmjs.org/@mistralai/mistralai", type: "sdk_npm" },
-    { name: "Hugging Face: mistralai", url: "https://huggingface.co/mistralai", type: "product_page" },
+    { name: "Hugging Face: mistralai", url: "https://huggingface.co/api/models?author=mistralai&sort=createdAt&direction=-1&limit=40", type: "model_catalog" },
   ],
 };

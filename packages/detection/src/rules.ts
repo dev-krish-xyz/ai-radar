@@ -4,6 +4,7 @@ import { DEFAULT_IMPORTANCE_BY_EVENT_TYPE } from "./importance";
 import { SIGNAL_CONFIDENCE_WEIGHTS, type SignalType, type EventType } from "@ai-radar/shared";
 import {
   MODEL_ID_PATTERN,
+  HF_REPO_PATTERN,
   ENDPOINT_PATTERN,
   DEPRECATION_PATTERN,
   PRICING_LINE_PATTERN,
@@ -11,7 +12,11 @@ import {
   CONTEXT_WINDOW_PATTERN,
   AVAILABILITY_PATTERN,
   ANNOUNCEMENT_PATTERN,
+  LEAK_PATTERN,
   VERSION_PATTERN,
+  CODENAME_PATTERN,
+  PROVIDER_NAME_PATTERN,
+  LAUNCH_VERB_PATTERN,
 } from "./patterns";
 
 export interface RuleInput {
@@ -32,6 +37,7 @@ function makeSignal(
   description: string,
   evidenceExtra: Record<string, unknown>,
   detectedAt: Date,
+  confidenceOverride?: number,
 ): RawSignal {
   return {
     signalType,
@@ -45,7 +51,7 @@ function makeSignal(
       sourceType: ctx.sourceType,
       ...evidenceExtra,
     },
-    confidenceContribution: SIGNAL_CONFIDENCE_WEIGHTS[signalType],
+    confidenceContribution: confidenceOverride ?? SIGNAL_CONFIDENCE_WEIGHTS[signalType],
     importanceHint: DEFAULT_IMPORTANCE_BY_EVENT_TYPE[suggestedEventType],
     sourceId: ctx.sourceId,
     providerId: ctx.providerId,
@@ -67,17 +73,44 @@ export function detectSignals(input: RuleInput, now: Date = new Date()): RawSign
   const signals: RawSignal[] = [];
   const addedText = lineDiff.added.join("\n");
   const removedText = lineDiff.removed.join("\n");
+  const isHf =
+    ctx.sourceUrl.includes("huggingface.co") || /hugging\s*face/i.test(ctx.sourceName);
+  const isFeed =
+    ctx.sourceType === "social" ||
+    /\.(xml|atom)$/i.test(ctx.sourceUrl) ||
+    /\/(feed|rss)/i.test(ctx.sourceUrl) ||
+    newContent.startsWith("FEED_ITEMS:");
 
   if (jsonDiff) {
     signals.push(...detectSdkVersionSignals(ctx, jsonDiff, now));
+    if (isHf || ctx.sourceType === "model_catalog") {
+      signals.push(...detectCatalogModelSignals(ctx, jsonDiff, now));
+    }
+    if (ctx.sourceType === "github_repo") {
+      signals.push(...detectGithubCommitSignals(ctx, lineDiff, oldContent, now));
+    }
+    if (newContent.includes('"repos"') && newContent.includes('"details"')) {
+      signals.push(...detectDiscoveredRepoSignals(ctx, oldContent, newContent, now));
+    }
+    if (newContent.includes('"papers"') && newContent.includes('"details"')) {
+      signals.push(...detectDailyPaperSignals(ctx, oldContent, newContent, now));
+    }
   }
 
   if (ctx.sourceType === "github_releases") {
-    signals.push(...detectGithubReleaseSignals(ctx, lineDiff, oldContent, now));
+    signals.push(...detectGithubReleaseSignals(ctx, lineDiff, oldContent, jsonDiff, now));
+  }
+
+  if (ctx.sourceType === "github_repo" && !jsonDiff) {
+    signals.push(...detectGithubCommitSignals(ctx, lineDiff, oldContent, now));
   }
 
   if (["docs", "changelog", "model_catalog", "api_reference"].includes(ctx.sourceType)) {
-    signals.push(...detectModelIdSignals(ctx, addedText, oldContent, now));
+    // Structured catalog set-diff already fired; skip regex fan-out on the same JSON.
+    const catalogHandled = Boolean(jsonDiff && (isHf || ctx.sourceType === "model_catalog"));
+    if (!catalogHandled) {
+      signals.push(...detectModelIdSignals(ctx, addedText, oldContent, now));
+    }
     signals.push(...detectEndpointSignals(ctx, addedText, oldContent, now));
     signals.push(...detectContextWindowSignals(ctx, lineDiff.added, now));
     signals.push(...detectAvailabilitySignals(ctx, lineDiff.added, now));
@@ -89,10 +122,217 @@ export function detectSignals(input: RuleInput, now: Date = new Date()): RawSign
 
   if (["blog", "product_page"].includes(ctx.sourceType)) {
     signals.push(...detectAnnouncementSignals(ctx, lineDiff.added, now));
+    signals.push(...detectModelIdSignals(ctx, addedText, oldContent, now));
+    if (isHf && !jsonDiff) {
+      signals.push(...detectHfRepoLineSignals(ctx, lineDiff, oldContent, now));
+    }
+  }
+
+  // RSS / social: only fire on model IDs, leak language, or provider+launch verb.
+  if (isFeed || ctx.sourceType === "social") {
+    signals.push(...detectFeedHeadlineSignals(ctx, lineDiff, oldContent, now));
   }
 
   // Deprecation language matters everywhere providers write prose.
   signals.push(...detectDeprecationSignals(ctx, lineDiff.added, removedText, now));
+
+  return signals;
+}
+
+/**
+ * New model IDs from normalized catalog payload `{ latest, count, models[] }`
+ * (HF API, HTML catalog extract, or OpenAPI). Set-diff only — index reshuffles
+ * of `recent` do not re-fire older ids.
+ */
+function detectCatalogModelSignals(ctx: DetectionContext, jsonDiff: JsonDiff, now: Date): RawSignal[] {
+  // Prefer reading the full new/old sets from the leaf that changed when available.
+  // Fall back to path-based latest change only.
+  const latestChange = jsonDiff.changed.find((e) => e.path === "$.latest");
+
+  // Collect model ids from any models[] added paths that are truly new members —
+  // but only if they don't appear as `from` values elsewhere (reorder artifact).
+  const addedModelLeaves = jsonDiff.added
+    .filter((e) => /^\$\.(models|recent)\[\d+\]$/.test(e.path) && typeof e.to === "string")
+    .map((e) => String(e.to));
+  const removedModelLeaves = new Set(
+    jsonDiff.removed
+      .filter((e) => /^\$\.(models|recent)\[\d+\]$/.test(e.path) && typeof e.from === "string")
+      .map((e) => String(e.from)),
+  );
+  // Also count changed leaves that gained a new string value (recent[0] swap).
+  const changedTo = jsonDiff.changed
+    .filter((e) => /^\$\.(models|recent)\[\d+\]$/.test(e.path) && typeof e.to === "string")
+    .map((e) => String(e.to));
+  const changedFrom = new Set(
+    jsonDiff.changed
+      .filter((e) => /^\$\.(models|recent)\[\d+\]$/.test(e.path) && typeof e.from === "string")
+      .map((e) => String(e.from)),
+  );
+
+  const candidates = new Set<string>();
+  for (const id of [...addedModelLeaves, ...changedTo]) {
+    // Skip ids that merely moved index (present in removed/changed-from).
+    if (removedModelLeaves.has(id) || changedFrom.has(id)) continue;
+    candidates.add(id);
+  }
+  // Do not treat `$.latest` pointer moves as a new model — latest is an
+  // unstable "first seen" field. Only membership changes in models[] count.
+  void latestChange;
+
+  if (candidates.size === 0) return [];
+
+  // Cap fan-out — a bulk import shouldn't spam 40 events.
+  const isHfCatalog =
+    ctx.sourceUrl.includes("huggingface.co") || /hugging\s*face/i.test(ctx.sourceName);
+  return [...candidates].slice(0, 5).map((id) =>
+    makeSignal(
+      ctx,
+      "new_model_id",
+      /preview|instruct-preview/i.test(id) ? "MODEL_PREVIEW" : "MODEL_LAUNCH",
+      id,
+      isHfCatalog ? `New Hugging Face model: ${id}` : `New model ID in catalog: ${id}`,
+      `"${id}" appeared in ${ctx.sourceName} and was not in the previous catalog snapshot.`,
+      { modelId: id, hfRepo: isHfCatalog ? id : undefined, latestChanged: latestChange?.to === id, role: "lead" },
+      now,
+    ),
+  );
+}
+
+/** HTML/fallback HF pages: catch newly added org/model lines. */
+function detectHfRepoLineSignals(
+  ctx: DetectionContext,
+  lineDiff: LineDiff,
+  oldContent: string,
+  now: Date,
+): RawSignal[] {
+  const candidates = new Set<string>();
+  for (const line of lineDiff.added) {
+    HF_REPO_PATTERN.lastIndex = 0;
+    for (const m of line.matchAll(HF_REPO_PATTERN)) {
+      const id = m[1]!;
+      // Skip obvious non-model paths
+      if (/\/(blob|tree|commit|discussions|settings)\b/i.test(id)) continue;
+      if (!oldContent.includes(id)) candidates.add(id);
+    }
+  }
+  if (candidates.size === 0) return [];
+  return [...candidates].slice(0, 5).map((id) =>
+    makeSignal(
+      ctx,
+      "new_model_id",
+      "MODEL_LAUNCH",
+      id,
+      `New Hugging Face repo mentioned: ${id}`,
+      `"${id}" appeared on ${ctx.sourceName}.`,
+      { hfRepo: id },
+      now,
+    ),
+  );
+}
+
+/**
+ * Feed headlines: fire only when the TITLE has a model ID, leak language,
+ * or (provider name + launch/release verb). Bare "AI" keywords are not enough.
+ */
+function detectFeedHeadlineSignals(
+  ctx: DetectionContext,
+  lineDiff: LineDiff,
+  oldContent: string,
+  now: Date,
+): RawSignal[] {
+  const titleLines = lineDiff.added.filter((l) => l.startsWith("TITLE: "));
+  if (titleLines.length === 0) return [];
+
+  const signals: RawSignal[] = [];
+  for (const line of titleLines.slice(0, 6)) {
+    const title = line.slice("TITLE: ".length).trim();
+    if (!title || oldContent.includes(line)) continue;
+
+    MODEL_ID_PATTERN.lastIndex = 0;
+    CODENAME_PATTERN.lastIndex = 0;
+    const modelMatch = title.match(MODEL_ID_PATTERN);
+    const codeMatch = title.match(CODENAME_PATTERN);
+    const hasModel = Boolean(modelMatch);
+    const hasCodename = Boolean(codeMatch);
+    const hasLeak = LEAK_PATTERN.test(title);
+    const hasProviderLaunch = PROVIDER_NAME_PATTERN.test(title) && LAUNCH_VERB_PATTERN.test(title);
+
+    if (!hasModel && !hasCodename && !hasLeak && !hasProviderLaunch) continue;
+
+    const entity = modelMatch?.[0] ?? codeMatch?.[0] ?? null;
+    const eventType = hasLeak && !hasModel
+      ? "OTHER"
+      : hasModel
+        ? /preview/i.test(entity ?? "")
+          ? "MODEL_PREVIEW"
+          : "MODEL_LAUNCH"
+        : hasCodename
+          ? "MODEL_PREVIEW"
+          : "NEW_PRODUCT";
+    const signalType = hasModel ? "new_model_id" : hasLeak || hasCodename ? "other" : "product_launch";
+
+    signals.push(
+      makeSignal(
+        ctx,
+        signalType as "new_model_id" | "other" | "product_launch",
+        eventType as "OTHER" | "MODEL_PREVIEW" | "MODEL_LAUNCH" | "NEW_PRODUCT",
+        entity,
+        entity ? `Feed: ${entity} — ${title.slice(0, 120)}` : `Feed: ${title.slice(0, 160)}`,
+        `New headline on ${ctx.sourceName}: ${title}`,
+        { headline: title.slice(0, 300), leak: hasLeak, role: "context" },
+        now,
+      ),
+    );
+  }
+  return signals;
+}
+
+function detectGithubCommitSignals(
+  ctx: DetectionContext,
+  lineDiff: LineDiff,
+  oldContent: string,
+  now: Date,
+): RawSignal[] {
+  const addedText = lineDiff.added.join("\n");
+  const signals: RawSignal[] = [];
+
+  const models = uniqueMatches(MODEL_ID_PATTERN, addedText).filter(
+    (id) => !oldContent.toLowerCase().includes(id.toLowerCase()),
+  );
+  for (const entity of models.slice(0, 3)) {
+    signals.push(
+      makeSignal(
+        ctx,
+        "new_model_id",
+        /preview/i.test(entity) ? "MODEL_PREVIEW" : "MODEL_LAUNCH",
+        entity,
+        `Model ID in ${ctx.sourceName} commits: ${entity}`,
+        `"${entity}" appeared in recent commit messages on ${ctx.sourceName}.`,
+        { matchedId: entity, role: "lead" },
+        now,
+      ),
+    );
+  }
+
+  CODENAME_PATTERN.lastIndex = 0;
+  const codes = uniqueMatches(CODENAME_PATTERN, addedText).filter(
+    (c) => !oldContent.toLowerCase().includes(c.toLowerCase()),
+  );
+  for (const code of codes.slice(0, 3)) {
+    if (models.some((m) => m.toLowerCase().includes(code.toLowerCase()))) continue;
+    signals.push(
+      makeSignal(
+        ctx,
+        "other",
+        "MODEL_PREVIEW",
+        code,
+        `Codename in ${ctx.sourceName} commits: ${code}`,
+        `"${code}" appeared in recent commit messages — possible unreleased model.`,
+        { codename: code, role: "lead" },
+        now,
+      ),
+    );
+  }
 
   return signals;
 }
@@ -210,7 +450,11 @@ function detectPricingSignals(ctx: DetectionContext, lineDiff: LineDiff, now: Da
 }
 
 function detectAnnouncementSignals(ctx: DetectionContext, addedLines: string[], now: Date): RawSignal[] {
-  const line = addedLines.find((l) => ANNOUNCEMENT_PATTERN.test(l) && MODEL_ID_PATTERN.test(l));
+  const line = addedLines.find((l) => {
+    ANNOUNCEMENT_PATTERN.lastIndex = 0;
+    MODEL_ID_PATTERN.lastIndex = 0;
+    return ANNOUNCEMENT_PATTERN.test(l) && MODEL_ID_PATTERN.test(l);
+  });
   if (!line) return [];
   MODEL_ID_PATTERN.lastIndex = 0;
   const entityMatch = line.match(MODEL_ID_PATTERN);
@@ -229,8 +473,63 @@ function detectAnnouncementSignals(ctx: DetectionContext, addedLines: string[], 
   ];
 }
 
-function detectGithubReleaseSignals(ctx: DetectionContext, lineDiff: LineDiff, oldContent: string, now: Date): RawSignal[] {
-  const candidates = lineDiff.added.filter((l) => VERSION_PATTERN.test(l) && !oldContent.includes(l));
+function detectGithubReleaseSignals(
+  ctx: DetectionContext,
+  lineDiff: LineDiff,
+  oldContent: string,
+  jsonDiff: JsonDiff | undefined,
+  now: Date,
+): RawSignal[] {
+  // Preferred path: normalized tags payload `{ latest, tags: [...] }` from API/Atom.
+  if (jsonDiff) {
+    const latestChange = jsonDiff.changed.find((e) => e.path === "$.latest");
+    if (latestChange && latestChange.to != null && String(latestChange.to).length > 0) {
+      const tag = String(latestChange.to);
+      return [
+        makeSignal(
+          ctx,
+          "github_release",
+          "GITHUB_CHANGE",
+          tag,
+          `New GitHub tag/release on ${ctx.sourceName}: ${tag}`,
+          `Latest tag moved to ${tag} (was ${latestChange.from ?? "unknown"}).`,
+          { previousLatest: latestChange.from ?? null, latest: tag },
+          now,
+        ),
+      ];
+    }
+
+    // New tags appearing in the list without a clean latest change (e.g. first snapshot shape drift).
+    const newTagEntries = jsonDiff.added.filter(
+      (e) => /^\$\.tags\[\d+\]$/.test(e.path) && typeof e.to === "string",
+    );
+    if (newTagEntries.length > 0) {
+      const tag = String(newTagEntries[0]!.to);
+      return [
+        makeSignal(
+          ctx,
+          "github_release",
+          "GITHUB_CHANGE",
+          tag,
+          `New GitHub tag on ${ctx.sourceName}: ${tag}`,
+          `${newTagEntries.length} new tag(s) appeared; newest added: ${tag}.`,
+          { newTags: newTagEntries.map((e) => e.to).slice(0, 10) },
+          now,
+        ),
+      ];
+    }
+  }
+
+  // HTML fallback: look for version-like lines that weren't in the prior snapshot.
+  // Require a v-prefix OR a full semver on its own short line to cut CSS/asset noise.
+  const candidates = lineDiff.added.filter((l) => {
+    const trimmed = l.trim();
+    if (trimmed.length > 80) return false;
+    if (!VERSION_PATTERN.test(trimmed)) return false;
+    VERSION_PATTERN.lastIndex = 0;
+    if (oldContent.includes(trimmed)) return false;
+    return /^v?\d+\.\d+\.\d+([\w.-]*)?$/i.test(trimmed) || /\brelease[sd]?\b/i.test(trimmed);
+  });
   if (candidates.length === 0) return [];
   const line = candidates[0]!;
   const versionMatch = line.match(VERSION_PATTERN);
@@ -239,7 +538,7 @@ function detectGithubReleaseSignals(ctx: DetectionContext, lineDiff: LineDiff, o
       ctx,
       "github_release",
       "GITHUB_CHANGE",
-      versionMatch ? versionMatch[1] : null,
+      versionMatch ? versionMatch[0] : null,
       `New GitHub release on ${ctx.sourceName}`,
       line.slice(0, 300),
       { matchedLine: line.slice(0, 300) },
@@ -269,6 +568,90 @@ function detectSdkVersionSignals(ctx: DetectionContext, jsonDiff: JsonDiff, now:
       now,
     ),
   );
+}
+
+const DISCOVERY_ALERT_CAP = 3;
+const DISCOVERY_CONFIDENCE = 40;
+
+function parseStringList(content: string, key: "repos" | "papers"): string[] {
+  try {
+    const parsed = JSON.parse(content) as Record<string, unknown>;
+    const arr = parsed[key];
+    if (!Array.isArray(arr)) return [];
+    return arr.filter((x): x is string => typeof x === "string");
+  } catch {
+    return [];
+  }
+}
+
+function parseDetails(content: string): Record<string, Record<string, unknown>> {
+  try {
+    const parsed = JSON.parse(content) as Record<string, unknown>;
+    const d = parsed.details;
+    if (!d || typeof d !== "object") return {};
+    return d as Record<string, Record<string, unknown>>;
+  } catch {
+    return {};
+  }
+}
+
+function detectDiscoveredRepoSignals(
+  ctx: DetectionContext,
+  oldContent: string,
+  newContent: string,
+  now: Date,
+): RawSignal[] {
+  const oldSet = new Set(parseStringList(oldContent, "repos"));
+  const fresh = parseStringList(newContent, "repos").filter((id) => !oldSet.has(id));
+  if (fresh.length === 0) return [];
+
+  const details = parseDetails(newContent);
+  return fresh.slice(0, DISCOVERY_ALERT_CAP).map((fullName) => {
+    const meta = details[fullName] ?? {};
+    const stars = typeof meta.stars === "number" ? meta.stars : null;
+    const desc = typeof meta.description === "string" ? meta.description : "";
+    const url = typeof meta.url === "string" ? meta.url : `https://github.com/${fullName}`;
+    return makeSignal(
+      ctx,
+      "product_launch",
+      "NEW_PRODUCT",
+      fullName,
+      `Rising AI repo: ${fullName}${stars != null ? ` (${stars}★)` : ""}`,
+      [desc, url].filter(Boolean).join(" — ").slice(0, 400) || `${fullName} appeared on ${ctx.sourceName}.`,
+      { repo: fullName, stars, url, role: "lead", postable: true },
+      now,
+      DISCOVERY_CONFIDENCE,
+    );
+  });
+}
+
+function detectDailyPaperSignals(
+  ctx: DetectionContext,
+  oldContent: string,
+  newContent: string,
+  now: Date,
+): RawSignal[] {
+  const oldSet = new Set(parseStringList(oldContent, "papers"));
+  const fresh = parseStringList(newContent, "papers").filter((id) => !oldSet.has(id));
+  if (fresh.length === 0) return [];
+
+  const details = parseDetails(newContent);
+  return fresh.slice(0, DISCOVERY_ALERT_CAP).map((id) => {
+    const meta = details[id] ?? {};
+    const title = typeof meta.title === "string" ? meta.title : id;
+    const url = typeof meta.url === "string" ? meta.url : `https://huggingface.co/papers/${id}`;
+    return makeSignal(
+      ctx,
+      "product_launch",
+      "NEW_PRODUCT",
+      id,
+      `HF Daily Paper: ${title.slice(0, 140)}`,
+      url,
+      { paperId: id, url, role: "lead", postable: true },
+      now,
+      DISCOVERY_CONFIDENCE,
+    );
+  });
 }
 
 /** A single-line diff this long is prose (a post title, a caption), not a counter/version bump. */

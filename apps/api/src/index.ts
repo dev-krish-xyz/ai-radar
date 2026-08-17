@@ -1,12 +1,76 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { db, signals as signalsTable, events as eventsTable, eventSignals as eventSignalsTable } from "@ai-radar/db";
-import { and, desc, eq } from "drizzle-orm";
+import {
+  db,
+  signals as signalsTable,
+  events as eventsTable,
+  eventSignals as eventSignalsTable,
+  sources as sourcesTable,
+  providers as providersTable,
+} from "@ai-radar/db";
+import { and, desc, eq, sql } from "drizzle-orm";
+import { isTelegramConfigured, meetsAlertThreshold } from "@ai-radar/shared";
 
 const app = new Hono();
 app.use("*", cors());
 
-app.get("/health", (c) => c.json({ ok: true }));
+app.get("/health", async (c) => {
+  try {
+    const sourcesEnabled = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(sourcesTable)
+      .where(eq(sourcesTable.enabled, true));
+    const sourcesInError = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(sourcesTable)
+      .where(sql`${sourcesTable.enabled} = true AND ${sourcesTable.lastStatus} ILIKE 'error%'`);
+    const providersEnabled = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(providersTable)
+      .where(eq(providersTable.enabled, true));
+    const uncorrelated = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(signalsTable)
+      .where(eq(signalsTable.correlated, false));
+    const last = await db
+      .select({ t: sql<Date | null>`max(${sourcesTable.lastCrawledAt})` })
+      .from(sourcesTable);
+
+    const lastCrawlAt = last[0]?.t ?? null;
+    const lastCrawlAgeMinutes = lastCrawlAt
+      ? Math.round((Date.now() - new Date(lastCrawlAt).getTime()) / 60_000)
+      : null;
+
+    const stale = lastCrawlAgeMinutes !== null && lastCrawlAgeMinutes > 30;
+    const ok = (sourcesInError[0]?.n ?? 0) === 0 && !stale;
+
+    return c.json({
+      ok,
+      telegramConfigured: isTelegramConfigured(),
+      providersEnabled: providersEnabled[0]?.n ?? 0,
+      sourcesEnabled: sourcesEnabled[0]?.n ?? 0,
+      sourcesInError: sourcesInError[0]?.n ?? 0,
+      signalsUncorrelated: uncorrelated[0]?.n ?? 0,
+      lastCrawlAt,
+      lastCrawlAgeMinutes,
+      staleWorker: stale,
+      hint: stale
+        ? "Worker appears down — last crawl >30m ago. Run `bun run worker`."
+        : (sourcesInError[0]?.n ?? 0) > 0
+          ? "Some sources are erroring — check GET /providers lastStatus."
+          : "pipeline healthy",
+    });
+  } catch (err) {
+    return c.json(
+      {
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+        hint: "Database unreachable — run `docker compose up -d` and check DATABASE_URL",
+      },
+      503,
+    );
+  }
+});
 
 app.get("/providers", async (c) => {
   const rows = await db.query.providers.findMany({
@@ -67,6 +131,9 @@ app.get("/events", async (c) => {
     confirmedAt: e.confirmedAt,
     leadTimeMinutes: e.leadTimeMinutes,
     signalCount: e.eventSignals.length,
+    wouldAlert: meetsAlertThreshold(e.confidence, e.importance, {
+      official: e.status === "CONFIRMED",
+    }),
   }));
 
   return c.json(result);

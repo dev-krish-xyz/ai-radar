@@ -22,6 +22,10 @@ export const env = {
   get groqApiKey() {
     return optional("GROQ_API_KEY");
   },
+  /** Optional classic PAT or fine-grained token — lifts GitHub API rate limit 60→5000/hr. */
+  get githubToken() {
+    return optional("GITHUB_TOKEN");
+  },
   get crawlerUserAgent() {
     return (
       optional("CRAWLER_USER_AGENT") ??

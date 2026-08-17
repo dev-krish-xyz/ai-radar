@@ -57,9 +57,12 @@ packages/
    don't stack) plus a corroboration bonus for 2-3+ independent source types,
    capped at 100. Importance is the max default-by-event-type across contributing
    signals, +1 for 3+ signals.
-8. **ALERT** — fires once per event, the first time it crosses
-   confidence ≥ 60 **and** importance ≥ 6 (`shared/types.ts`). Sent via Telegram
-   (`detection/alertFormat.ts` → `shared/telegram.ts`).
+8. **ALERT** — fires once per event when `meetsAlertThreshold` passes
+   (`shared/types.ts`): (conf≥60 & imp≥6) OR early high-importance
+   (imp≥8 & conf≥35) OR solid mid-tier (imp≥6 & conf≥40) OR official-channel
+   (blog/CONFIRMED, imp≥6 & conf≥15). Sent via Telegram
+   (`detection/alertFormat.ts` → `shared/telegram.ts`). `alertedAt` is only set
+   after a successful send — failures retry on later ticks.
 
 ### Confirmation
 
@@ -89,8 +92,28 @@ bun run web                 # Next.js dashboard (apps/web), talks to API_URL (de
 bun run typecheck           # tsc -b across every package/app except apps/web (Next manages its own)
 ```
 
-Run `worker`, `api`, and `web` as three separate long-lived processes during
-normal use.
+Preferred: run the supervisor (auto-restarts worker + api on crash):
+
+```bash
+docker compose up -d
+bun run db:seed
+bun run up              # worker + api, restarts on crash
+# or
+bun run up:web          # + Next.js dashboard
+# macOS login auto-start:
+bun run install:launchd
+```
+
+You can still run `worker`, `api`, and `web` as three separate processes.
+
+## Early / leak-oriented sources
+
+`packages/providers/src/early.ts` is **lead-only**: HF blog, Simon Willison, HF
+org APIs, **rising GitHub repos** (Search API, 7-day / ≥30★), **GitHub Trending
+AI-filtered**, and **HF Daily Papers**. Press RSS (Verge/TC) is `enabled: false`.
+First snapshot of discovery sources is a baseline (no 40-item dump). New repo /
+paper names after that Telegram as postable content. Set `GITHUB_TOKEN` for
+reliable repo search.
 
 ## Adding or changing sources
 
@@ -98,7 +121,9 @@ Edit `packages/providers/src/tier1/*.ts` (or `tier2/*.ts`), then run
 `bun run db:seed` — it upserts by `(providerId, url)`, so re-running is safe.
 Each `SourceConfig` needs a `type` (drives both detection rules and default crawl
 cadence — see `CRAWL_INTERVALS` in `packages/providers/src/types.ts`: registries
-~10min, docs/changelogs 15min, GitHub/SDKs 20min, pricing 60min).
+catalogs/changelogs/blogs ~5min, docs/product ~10min, GitHub/SDKs ~10min,
+pricing ~30min). GitHub sources fetch `tags.atom` (or Tags API when
+`GITHUB_TOKEN` is set) rather than scraping HTML release pages.
 
 Tier 2 providers are seeded but `enabled: false` on both the provider and
 implicitly its sources — flip `enabled: true` in the provider config once Tier 1

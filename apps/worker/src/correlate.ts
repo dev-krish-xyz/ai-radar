@@ -5,7 +5,7 @@ import {
   eventSignals as eventSignalsTable,
   providers as providersTable,
 } from "@ai-radar/db";
-import { and, eq, gte } from "drizzle-orm";
+import { and, eq, gte, isNull, or } from "drizzle-orm";
 import {
   findMatchingEvent,
   isAnnouncementSource,
@@ -18,8 +18,7 @@ import {
 } from "@ai-radar/detection";
 import {
   sendTelegramMessage,
-  ALERT_CONFIDENCE_THRESHOLD,
-  ALERT_IMPORTANCE_THRESHOLD,
+  meetsAlertThreshold,
   type EvidenceItem,
 } from "@ai-radar/shared";
 
@@ -28,14 +27,23 @@ import {
  * matching open PRE_ANNOUNCEMENT event or seeds a new one. Implements the
  * CORRELATION -> CONFIDENCE -> ALERT stages of the pipeline, plus the
  * PRE_ANNOUNCEMENT -> CONFIRMED transition when an official channel corroborates.
+ *
+ * Also re-checks unalerted open events so threshold changes or previously failed
+ * Telegram sends can still deliver.
  */
-export async function runCorrelation(): Promise<void> {
+export async function runCorrelation(): Promise<{ correlated: number; alerted: number; alertFailed: number }> {
   const pending = await db.query.signals.findMany({
     where: eq(signalsTable.correlated, false),
     orderBy: (s, { asc }) => [asc(s.detectedAt)],
   });
 
-  if (pending.length === 0) return;
+  let correlated = 0;
+  let alerted = 0;
+  let alertFailed = 0;
+
+  if (pending.length > 0) {
+    console.log(`[correlate] ${pending.length} uncorrelated signal(s)`);
+  }
 
   const providerCache = new Map<number, typeof providersTable.$inferSelect>();
   const getProvider = async (id: number) => {
@@ -43,12 +51,15 @@ export async function runCorrelation(): Promise<void> {
       const p = await db.query.providers.findFirst({ where: eq(providersTable.id, id) });
       if (p) providerCache.set(id, p);
     }
-    return providerCache.get(id)!;
+    return providerCache.get(id);
   };
 
   for (const signal of pending) {
     const provider = await getProvider(signal.providerId);
-    if (!provider) continue;
+    if (!provider) {
+      console.error(`[correlate] signal ${signal.id} has missing provider ${signal.providerId}; leaving uncorrelated`);
+      continue;
+    }
 
     const now = new Date();
     const cutoff = new Date(now.getTime() - MAX_EVENT_OPEN_MS);
@@ -76,9 +87,7 @@ export async function runCorrelation(): Promise<void> {
     );
 
     const eventId = match ? match.id : await createEvent(provider, signal, now);
-    if (!match) {
-      // createEvent already links the seeding signal.
-    } else {
+    if (match) {
       await db.insert(eventSignalsTable).values({
         eventId,
         signalId: signal.id,
@@ -87,9 +96,58 @@ export async function runCorrelation(): Promise<void> {
     }
 
     await db.update(signalsTable).set({ correlated: true }).where(eq(signalsTable.id, signal.id));
+    correlated += 1;
 
-    await recomputeAndMaybeAlert(eventId, provider.name, signal.sourceType, signal.detectedAt);
+    const result = await recomputeAndMaybeAlert(eventId, provider.name, signal.sourceType, signal.detectedAt);
+    if (result === "alerted") alerted += 1;
+    if (result === "alert_failed") alertFailed += 1;
   }
+
+  // Sweep: events that already meet the bar but never successfully alerted
+  // (threshold was raised historically, Telegram was down, etc.).
+  const sweep = await sweepUnalertedEvents(providerCache);
+  alerted += sweep.alerted;
+  alertFailed += sweep.alertFailed;
+
+  return { correlated, alerted, alertFailed };
+}
+
+async function sweepUnalertedEvents(
+  providerCache: Map<number, typeof providersTable.$inferSelect>,
+): Promise<{ alerted: number; alertFailed: number }> {
+  let alerted = 0;
+  let alertFailed = 0;
+
+  const candidates = await db.query.events.findMany({
+    where: and(
+      isNull(eventsTable.alertedAt),
+      or(eq(eventsTable.status, "PRE_ANNOUNCEMENT"), eq(eventsTable.status, "CONFIRMED")),
+    ),
+    orderBy: (e, { desc }) => [desc(e.firstDetectedAt)],
+    limit: 80,
+  });
+
+  for (const event of candidates) {
+    const official = event.status === "CONFIRMED";
+    if (!meetsAlertThreshold(event.confidence, event.importance, { official })) continue;
+
+    let provider = providerCache.get(event.providerId);
+    if (!provider) {
+      provider = await db.query.providers.findFirst({ where: eq(providersTable.id, event.providerId) });
+      if (provider) providerCache.set(event.providerId, provider);
+    }
+    if (!provider) continue;
+
+    console.log(
+      `[alert] sweep: event #${event.id} "${event.title}" conf=${event.confidence} imp=${event.importance} never alerted — retrying`,
+    );
+    // Pass a non-announcement source type so the sweep cannot flip PRE_ANNOUNCEMENT → CONFIRMED.
+    const result = await recomputeAndMaybeAlert(event.id, provider.name, "docs", event.firstDetectedAt);
+    if (result === "alerted") alerted += 1;
+    if (result === "alert_failed") alertFailed += 1;
+  }
+
+  return { alerted, alertFailed };
 }
 
 async function createEvent(
@@ -138,17 +196,24 @@ async function createEvent(
     contribution: signal.confidenceContribution,
   });
 
+  console.log(
+    `[correlate] new event #${row!.id} ${aggregate.type} conf=${aggregate.confidence} imp=${aggregate.importance} ` +
+      `"${aggregate.title}" (meetsAlert=${meetsAlertThreshold(aggregate.confidence, aggregate.importance, { official: announced })})`,
+  );
+
   return row!.id;
 }
+
+type AlertOutcome = "alerted" | "alert_failed" | "skipped" | "updated";
 
 async function recomputeAndMaybeAlert(
   eventId: number,
   providerName: string,
   newSignalSourceType: string,
   newSignalDetectedAt: Date,
-): Promise<void> {
+): Promise<AlertOutcome> {
   const event = await db.query.events.findFirst({ where: eq(eventsTable.id, eventId) });
-  if (!event) return;
+  if (!event) return "skipped";
 
   const links = await db.query.eventSignals.findMany({
     where: eq(eventSignalsTable.eventId, eventId),
@@ -200,7 +265,11 @@ async function recomputeAndMaybeAlert(
     })
     .where(eq(eventsTable.id, eventId));
 
-  const meetsAlertBar = aggregate.confidence >= ALERT_CONFIDENCE_THRESHOLD && aggregate.importance >= ALERT_IMPORTANCE_THRESHOLD;
+  const official =
+    status === "CONFIRMED" ||
+    isAnnouncementSource(newSignalSourceType) ||
+    signalRecords.some((s) => isAnnouncementSource(s.sourceType));
+  const meetsAlertBar = meetsAlertThreshold(aggregate.confidence, aggregate.importance, { official });
 
   if (meetsAlertBar && !event.alertedAt) {
     const evidence: EvidenceItem[] = links.map((l) => ({
@@ -222,11 +291,40 @@ async function recomputeAndMaybeAlert(
       evidence,
     });
 
-    await sendTelegramMessage(message);
-    await db.update(eventsTable).set({ alertedAt: now }).where(eq(eventsTable.id, eventId));
-  } else if (justConfirmed && event.alertedAt) {
-    await sendTelegramMessage(
-      `✅ <b>CONFIRMED</b>\n\n${aggregate.title}\n\nLead time: ${leadTimeMinutes} minutes`,
+    const send = await sendTelegramMessage(message);
+    if (send.ok) {
+      await db.update(eventsTable).set({ alertedAt: now }).where(eq(eventsTable.id, eventId));
+      console.log(
+        `[alert] SENT event #${eventId} conf=${aggregate.confidence} imp=${aggregate.importance} "${aggregate.title}"`,
+      );
+      return "alerted";
+    }
+
+    // Critical: do NOT set alertedAt on failure — next tick / sweep will retry.
+    console.error(
+      `[alert] FAILED event #${eventId} conf=${aggregate.confidence} imp=${aggregate.importance}: ` +
+        `${send.error ?? `HTTP ${send.status}`}${send.skipped ? " (telegram not configured)" : ""}`,
+    );
+    return "alert_failed";
+  }
+
+  if (!meetsAlertBar && !event.alertedAt) {
+    console.log(
+      `[alert] below threshold event #${eventId} conf=${aggregate.confidence} imp=${aggregate.importance} official=${official} ` +
+        `(need conf≥60&imp≥6 OR imp≥8&conf≥35 OR imp≥6&conf≥40 OR official&imp≥6&conf≥15)`,
     );
   }
+
+  if (justConfirmed && event.alertedAt) {
+    const send = await sendTelegramMessage(
+      `✅ <b>CONFIRMED</b>\n\n${aggregate.title}\n\nLead time: ${leadTimeMinutes} minutes`,
+    );
+    if (!send.ok) {
+      console.error(`[alert] confirmation send failed for event #${eventId}: ${send.error ?? send.status}`);
+      return "alert_failed";
+    }
+    return "alerted";
+  }
+
+  return "updated";
 }

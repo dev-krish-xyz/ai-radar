@@ -6,6 +6,8 @@ export interface FetchOptions {
   lastModified?: string | null;
   timeoutMs?: number;
   retries?: number;
+  /** Extra request headers (e.g. GitHub Accept / Authorization). */
+  headers?: Record<string, string>;
 }
 
 export interface FetchResult {
@@ -46,8 +48,19 @@ export async function fetchSource(url: string, options: FetchOptions = {}): Prom
     try {
       const headers: Record<string, string> = {
         "user-agent": env.crawlerUserAgent,
-        accept: "text/html,application/json,application/xhtml+xml,*/*;q=0.8",
+        accept: "text/html,application/json,application/xhtml+xml,application/atom+xml,*/*;q=0.8",
+        ...options.headers,
       };
+      // GitHub API: structured Accept + optional token (60 → 5000 req/hr).
+      if (url.includes("api.github.com")) {
+        headers.accept = headers.accept?.includes("vnd.github")
+          ? headers.accept
+          : "application/vnd.github+json";
+        headers["x-github-api-version"] = headers["x-github-api-version"] ?? "2022-11-28";
+        if (env.githubToken && !headers.authorization) {
+          headers.authorization = `Bearer ${env.githubToken}`;
+        }
+      }
       if (options.etag) headers["if-none-match"] = options.etag;
       if (options.lastModified) headers["if-modified-since"] = options.lastModified;
 

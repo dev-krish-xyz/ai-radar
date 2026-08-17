@@ -1,4 +1,5 @@
 import * as cheerio from "cheerio";
+import { extractFeedContent, isFeedContent } from "./rss";
 
 const NOISE_SELECTORS = [
   "script",
@@ -71,7 +72,7 @@ export function isJsonContentType(contentType: string | null): boolean {
 }
 
 /** Picks the right extraction strategy for the fetched content type. */
-export function extractContent(body: string, contentType: string | null): string {
+export function extractContent(body: string, contentType: string | null, url?: string): string {
   if (isJsonContentType(contentType)) {
     try {
       return normalizeJsonContent(body);
@@ -79,5 +80,11 @@ export function extractContent(body: string, contentType: string | null): string
       // fall through to HTML/text extraction if the JSON fails to parse
     }
   }
+
+  if (isFeedContent(body, contentType, url ?? "")) {
+    const feed = extractFeedContent(body);
+    if (feed) return feed;
+  }
+
   return extractHtmlContent(body);
 }
