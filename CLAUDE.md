@@ -62,7 +62,9 @@ packages/
    (imp≥8 & conf≥35) OR solid mid-tier (imp≥6 & conf≥40) OR official-channel
    (blog/CONFIRMED, imp≥6 & conf≥15). Sent via Telegram
    (`detection/alertFormat.ts` → `shared/telegram.ts`). `alertedAt` is only set
-   after a successful send — failures retry on later ticks.
+   after a successful send — failures retry on later ticks. Events whose
+   `firstDetectedAt` is older than 48h (`ALERT_MAX_AGE_MS`) are never sent,
+   including sweep retries — that blocks deploy/backfill pages of stale news.
 
 ### Confirmation
 

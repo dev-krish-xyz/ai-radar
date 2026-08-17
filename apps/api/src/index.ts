@@ -9,7 +9,7 @@ import {
   providers as providersTable,
 } from "@ai-radar/db";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { isTelegramConfigured, meetsAlertThreshold } from "@ai-radar/shared";
+import { isTelegramConfigured, meetsAlertThreshold, isAlertFresh } from "@ai-radar/shared";
 
 const app = new Hono();
 app.use("*", cors());
@@ -131,9 +131,11 @@ app.get("/events", async (c) => {
     confirmedAt: e.confirmedAt,
     leadTimeMinutes: e.leadTimeMinutes,
     signalCount: e.eventSignals.length,
-    wouldAlert: meetsAlertThreshold(e.confidence, e.importance, {
-      official: e.status === "CONFIRMED",
-    }),
+    wouldAlert:
+      isAlertFresh(e.firstDetectedAt) &&
+      meetsAlertThreshold(e.confidence, e.importance, {
+        official: e.status === "CONFIRMED",
+      }),
   }));
 
   return c.json(result);

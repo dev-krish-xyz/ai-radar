@@ -19,6 +19,8 @@ import {
 import {
   sendTelegramMessage,
   meetsAlertThreshold,
+  isAlertFresh,
+  ALERT_MAX_AGE_MS,
   type EvidenceItem,
 } from "@ai-radar/shared";
 
@@ -28,8 +30,9 @@ import {
  * CORRELATION -> CONFIDENCE -> ALERT stages of the pipeline, plus the
  * PRE_ANNOUNCEMENT -> CONFIRMED transition when an official channel corroborates.
  *
- * Also re-checks unalerted open events so threshold changes or previously failed
- * Telegram sends can still deliver.
+ * Also re-checks unalerted open events so previously failed Telegram sends
+ * can still deliver. Events first detected more than 48h ago are never
+ * paged — that blocks sweep backfills of stale news.
  */
 export async function runCorrelation(): Promise<{ correlated: number; alerted: number; alertFailed: number }> {
   const pending = await db.query.signals.findMany({
@@ -118,9 +121,11 @@ async function sweepUnalertedEvents(
   let alerted = 0;
   let alertFailed = 0;
 
+  const freshCutoff = new Date(Date.now() - ALERT_MAX_AGE_MS);
   const candidates = await db.query.events.findMany({
     where: and(
       isNull(eventsTable.alertedAt),
+      gte(eventsTable.firstDetectedAt, freshCutoff),
       or(eq(eventsTable.status, "PRE_ANNOUNCEMENT"), eq(eventsTable.status, "CONFIRMED")),
     ),
     orderBy: (e, { desc }) => [desc(e.firstDetectedAt)],
@@ -130,6 +135,7 @@ async function sweepUnalertedEvents(
   for (const event of candidates) {
     const official = event.status === "CONFIRMED";
     if (!meetsAlertThreshold(event.confidence, event.importance, { official })) continue;
+    if (!isAlertFresh(event.firstDetectedAt)) continue;
 
     let provider = providerCache.get(event.providerId);
     if (!provider) {
@@ -270,6 +276,15 @@ async function recomputeAndMaybeAlert(
     isAnnouncementSource(newSignalSourceType) ||
     signalRecords.some((s) => isAnnouncementSource(s.sourceType));
   const meetsAlertBar = meetsAlertThreshold(aggregate.confidence, aggregate.importance, { official });
+  const fresh = isAlertFresh(event.firstDetectedAt, now);
+
+  if (meetsAlertBar && !event.alertedAt && !fresh) {
+    console.log(
+      `[alert] skipped stale event #${eventId} firstDetected=${event.firstDetectedAt.toISOString()} ` +
+        `(older than ${ALERT_MAX_AGE_MS / 3_600_000}h) "${aggregate.title}"`,
+    );
+    return "skipped";
+  }
 
   if (meetsAlertBar && !event.alertedAt) {
     const evidence: EvidenceItem[] = links.map((l) => ({

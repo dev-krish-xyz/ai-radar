@@ -92,6 +92,16 @@ export const ALERT_SOLID_CONFIDENCE_MIN = 40;
  */
 export const ALERT_OFFICIAL_CONFIDENCE_MIN = 15;
 
+/**
+ * Never Telegram an event whose first detection is older than this.
+ * Stops deploy/sweep backfills (Aug 12 Llama, etc.) from paging as if they were news.
+ */
+export const ALERT_MAX_AGE_MS = 48 * 60 * 60 * 1000;
+
+export function isAlertFresh(firstDetectedAt: Date, now: Date = new Date()): boolean {
+  return now.getTime() - firstDetectedAt.getTime() <= ALERT_MAX_AGE_MS;
+}
+
 export interface AlertGateOptions {
   /** True when a blog/product_page signal contributed, or the event is CONFIRMED. */
   official?: boolean;

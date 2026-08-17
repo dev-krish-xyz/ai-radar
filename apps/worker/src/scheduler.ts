@@ -174,11 +174,13 @@ export async function pipelineHealth(): Promise<{
   const unalerted = await db.execute(sql`
     SELECT count(*)::int AS n FROM events
     WHERE alerted_at IS NULL
-      AND status = 'PRE_ANNOUNCEMENT'
+      AND status IN ('PRE_ANNOUNCEMENT', 'CONFIRMED')
+      AND first_detected_at >= now() - interval '48 hours'
       AND (
         (confidence >= 60 AND importance >= 6)
         OR (importance >= 8 AND confidence >= 35)
         OR (importance >= 6 AND confidence >= 40)
+        OR (status = 'CONFIRMED' AND importance >= 6 AND confidence >= 15)
       )
   `);
 
