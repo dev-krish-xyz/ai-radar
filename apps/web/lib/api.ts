@@ -77,7 +77,7 @@ export interface ProviderDetail extends ProviderSummary {
 
 export const api = {
   health: () => getHealth(),
-  events: (params?: { status?: string }) => listEvents(params),
+  events: (params?: { status?: string; limit?: number }) => listEvents(params),
   event: (id: number) => getEvent(id),
   signals: (params?: { limit?: number }) => listSignals(params?.limit ?? 100),
   providers: () => listProviders(),
