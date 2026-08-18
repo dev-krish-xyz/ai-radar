@@ -23,7 +23,11 @@
       "name": "@ai-radar/web",
       "version": "0.1.0",
       "dependencies": {
+        "@ai-radar/db": "workspace:*",
+        "@ai-radar/shared": "workspace:*",
+        "drizzle-orm": "^0.38.3",
         "next": "^15.1.4",
+        "postgres": "^3.4.5",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
       },

@@ -3,9 +3,11 @@ import { Nav } from "@/components/Nav";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "AI Release Radar",
-  description: "Personal AI product/model release monitor",
+  title: "AI Radar",
+  description: "What just happened in AI — personal intelligence feed",
 };
+
+export const dynamic = "force-dynamic";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

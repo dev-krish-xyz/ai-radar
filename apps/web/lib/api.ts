@@ -1,4 +1,4 @@
-const API_URL = process.env.API_URL ?? "http://localhost:8787";
+import { getEvent, getHealth, listEvents, listProviders, listSignals } from "./data";
 
 export type EventStatus = "PRE_ANNOUNCEMENT" | "CONFIRMED" | "DISMISSED";
 
@@ -23,6 +23,8 @@ export interface EventListItem {
   confirmedAt: string | null;
   leadTimeMinutes: number | null;
   signalCount: number;
+  alertedAt?: string | null;
+  wouldAlert?: boolean;
 }
 
 export interface EvidenceItem {
@@ -73,27 +75,10 @@ export interface ProviderDetail extends ProviderSummary {
   sources: SourceSummary[];
 }
 
-async function apiFetch<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, { cache: "no-store" });
-  if (!res.ok) throw new Error(`API ${path} failed: ${res.status}`);
-  return res.json() as Promise<T>;
-}
-
 export const api = {
-  events: (params?: { status?: string; providerId?: number }) => {
-    const qs = new URLSearchParams();
-    if (params?.status) qs.set("status", params.status);
-    if (params?.providerId) qs.set("providerId", String(params.providerId));
-    const suffix = qs.toString() ? `?${qs}` : "";
-    return apiFetch<EventListItem[]>(`/events${suffix}`);
-  },
-  event: (id: number) => apiFetch<EventDetail>(`/events/${id}`),
-  signals: (params?: { providerId?: number; limit?: number }) => {
-    const qs = new URLSearchParams();
-    if (params?.providerId) qs.set("providerId", String(params.providerId));
-    if (params?.limit) qs.set("limit", String(params.limit));
-    const suffix = qs.toString() ? `?${qs}` : "";
-    return apiFetch<SignalListItem[]>(`/signals${suffix}`);
-  },
-  providers: () => apiFetch<ProviderDetail[]>("/providers"),
+  health: () => getHealth(),
+  events: (params?: { status?: string }) => listEvents(params),
+  event: (id: number) => getEvent(id),
+  signals: (params?: { limit?: number }) => listSignals(params?.limit ?? 100),
+  providers: () => listProviders(),
 };

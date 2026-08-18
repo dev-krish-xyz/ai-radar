@@ -95,7 +95,8 @@ bun run db:seed             # sync packages/providers registry into the DB (idem
 bun run worker              # crawl loop, ticks every 60s, runs forever
 bun run worker:once         # single pass then exit (useful for testing)
 bun run api                 # Hono API on :8787
-bun run web                 # Next.js dashboard (apps/web), talks to API_URL (default :8787)
+bun run web                 # Next.js dashboard (apps/web) — reads DATABASE_URL directly
+                            # Deploy: Vercel, Root Directory apps/web, env DATABASE_URL=Neon
 
 bun run typecheck           # tsc -b across every package/app except apps/web (Next manages its own)
 ```
