@@ -12,26 +12,29 @@ export function StatusBadge({ status }: { status: EventStatus }) {
     DISMISSED: "Dismissed",
   };
   return (
-    <span className={`inline-block shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${styles[status]}`}>
+    <span
+      className={`inline-flex h-[18px] items-center rounded-full px-1.5 text-[11px] font-medium leading-none ${styles[status]}`}
+    >
       {labels[status]}
     </span>
   );
 }
 
-function confidenceColor(confidence: number): string {
-  if (confidence >= 80) return "text-emerald";
-  if (confidence >= 60) return "text-accent-text";
-  if (confidence >= 40) return "text-amber";
-  return "text-text-tertiary";
-}
-
 export function ConfidenceBadge({ confidence }: { confidence: number }) {
-  return <span className={`font-semibold ${confidenceColor(confidence)}`}>{confidence}%</span>;
+  const color =
+    confidence >= 80
+      ? "text-emerald"
+      : confidence >= 60
+        ? "text-accent-text"
+        : confidence >= 40
+          ? "text-amber"
+          : "text-text-tertiary";
+  return <span className={`tabular-nums ${color}`}>{confidence}%</span>;
 }
 
 export function ImportanceBadge({ importance }: { importance: number }) {
   return (
-    <span className="text-text-secondary">
+    <span className="tabular-nums text-text">
       {importance}
       <span className="text-text-tertiary">/10</span>
     </span>

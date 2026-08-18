@@ -2,57 +2,63 @@
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
+/* Apple HIG system colors / macOS desktop chrome */
 :root {
-  --bg: #ffffff;
-  --bg-inset: #fbfbfa;
-  --bg-hover: #f2f1ee;
-  --bg-active: #ebeae7;
-  --border: #ebebe9;
-  --border-strong: #dedcd9;
-  --text: #1b1b18;
-  --text-secondary: #6f6e69;
-  --text-tertiary: #9b9a95;
-  --accent: #0071e3;
-  --accent-text: #0071e3;
-  --accent-soft: #eaf3fd;
-  --amber: #a9720a;
-  --amber-soft: #fbf1de;
-  --emerald: #1a8a5f;
-  --emerald-soft: #e6f5ee;
-  --neutral-soft: #f0efec;
-  --sky: #1478c9;
-  --shadow: 0 1px 2px rgba(20, 20, 19, 0.04), 0 1px 8px rgba(20, 20, 19, 0.03);
-  --shadow-hover: 0 2px 6px rgba(20, 20, 19, 0.06), 0 8px 24px rgba(20, 20, 19, 0.06);
+  --bg: #f5f5f7;
+  --surface: #ffffff;
+  --bg-hover: rgba(0, 0, 0, 0.04);
+  --bg-active: rgba(0, 0, 0, 0.065);
+  --fill: rgba(120, 120, 128, 0.16);
+  --border: rgba(60, 60, 67, 0.12);
+  --border-strong: rgba(60, 60, 67, 0.2);
+  --text: #1d1d1f;
+  --text-secondary: rgba(60, 60, 67, 0.64);
+  --text-tertiary: rgba(60, 60, 67, 0.34);
+  --accent: #007aff;
+  --accent-text: #007aff;
+  --accent-soft: rgba(0, 122, 255, 0.12);
+  --amber: #c93400;
+  --amber-soft: rgba(255, 149, 0, 0.16);
+  --emerald: #1f8a4c;
+  --emerald-soft: rgba(52, 199, 89, 0.16);
+  --neutral-soft: rgba(120, 120, 128, 0.14);
+  --sky: #007aff;
+  --toolbar: rgba(246, 246, 248, 0.82);
+  --shadow: 0 0.5px 0 rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-control: 0 0.5px 0 rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
 [data-theme="dark"] {
-  --bg: #1b1b1a;
-  --bg-inset: #202020;
-  --bg-hover: #2a2a28;
-  --bg-active: #323230;
-  --border: #2e2e2c;
-  --border-strong: #3d3d3a;
-  --text: #eeeeec;
-  --text-secondary: #a3a29d;
-  --text-tertiary: #7a7975;
-  --accent: #2f9bf5;
-  --accent-text: #4dabf7;
-  --accent-soft: #16283a;
-  --amber: #e0ac4c;
-  --amber-soft: #332711;
-  --emerald: #4fcc94;
-  --emerald-soft: #10291f;
-  --neutral-soft: #262625;
-  --sky: #57adf2;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 1px 8px rgba(0, 0, 0, 0.16);
-  --shadow-hover: 0 2px 6px rgba(0, 0, 0, 0.24), 0 8px 24px rgba(0, 0, 0, 0.28);
+  --bg: #1c1c1e;
+  --surface: #2c2c2e;
+  --bg-hover: rgba(255, 255, 255, 0.06);
+  --bg-active: rgba(255, 255, 255, 0.09);
+  --fill: rgba(118, 118, 128, 0.28);
+  --border: rgba(84, 84, 88, 0.45);
+  --border-strong: rgba(84, 84, 88, 0.65);
+  --text: #f5f5f7;
+  --text-secondary: rgba(235, 235, 245, 0.6);
+  --text-tertiary: rgba(235, 235, 245, 0.32);
+  --accent: #0a84ff;
+  --accent-text: #64b5ff;
+  --accent-soft: rgba(10, 132, 255, 0.2);
+  --amber: #ff9f0a;
+  --amber-soft: rgba(255, 159, 10, 0.18);
+  --emerald: #30d158;
+  --emerald-soft: rgba(48, 209, 88, 0.16);
+  --neutral-soft: rgba(118, 118, 128, 0.28);
+  --sky: #64d2ff;
+  --toolbar: rgba(28, 28, 30, 0.82);
+  --shadow: 0 0.5px 0 rgba(255, 255, 255, 0.04), 0 1px 3px rgba(0, 0, 0, 0.32);
+  --shadow-control: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
 @theme inline {
   --color-bg: var(--bg);
-  --color-bg-inset: var(--bg-inset);
+  --color-surface: var(--surface);
   --color-bg-hover: var(--bg-hover);
   --color-bg-active: var(--bg-active);
+  --color-fill: var(--fill);
   --color-border: var(--border);
   --color-border-strong: var(--border-strong);
   --color-text: var(--text);
@@ -67,12 +73,13 @@
   --color-emerald-soft: var(--emerald-soft);
   --color-neutral-soft: var(--neutral-soft);
   --color-sky: var(--sky);
-  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Helvetica Neue",
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue",
     ui-sans-serif, system-ui, sans-serif;
 }
 
 html {
   color-scheme: light;
+  overflow-x: clip;
 }
 
 [data-theme="dark"] {
@@ -87,11 +94,32 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.38462;
+  letter-spacing: -0.006em;
+  overflow-x: clip;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (max-width: 639px) {
+  body {
+    padding-bottom: calc(52px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+button,
+a {
+  touch-action: manipulation;
 }
 
 ::selection {
   background: var(--accent-soft);
-  color: var(--accent-text);
+  color: var(--text);
+}
+
+a {
+  color: inherit;
 }

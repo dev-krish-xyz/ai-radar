@@ -12,5 +12,11 @@ export function relativeTime(iso: string): string {
 }
 
 export function formatDateTime(iso: string): string {
-  return new Date(iso).toISOString().replace("T", " ").slice(0, 19) + " UTC";
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(iso));
 }

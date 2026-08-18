@@ -2,44 +2,48 @@
 
 import { useEffect, useState } from "react";
 
+type Theme = "light" | "dark";
+
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<"light" | "dark" | null>(null);
+  const [theme, setTheme] = useState<Theme>("light");
 
   useEffect(() => {
-    setTheme((document.documentElement.getAttribute("data-theme") as "light" | "dark") ?? "light");
+    setTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light");
   }, []);
 
-  function toggle() {
-    const next = theme === "dark" ? "light" : "dark";
+  function choose(next: Theme) {
     document.documentElement.setAttribute("data-theme", next);
-    localStorage.setItem("theme", next);
+    localStorage.setItem("appearance", next);
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute("content", next === "dark" ? "#1c1c1e" : "#f5f5f7");
     setTheme(next);
   }
 
   return (
-    <button
-      type="button"
-      onClick={toggle}
-      aria-label="Toggle theme"
-      className="flex h-8 w-8 items-center justify-center rounded-full text-text-secondary transition hover:bg-bg-hover hover:text-text"
+    <div
+      className="inline-flex shrink-0 rounded-[7px] bg-fill p-[2px]"
+      role="radiogroup"
+      aria-label="Appearance"
     >
-      {theme === "dark" ? (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <circle cx="12" cy="12" r="4.5" />
-          <path
-            strokeLinecap="round"
-            d="M12 2.5v2M12 19.5v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2.5 12h2M19.5 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"
-          />
-        </svg>
-      ) : (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M20.5 14.2a8.5 8.5 0 1 1-10.7-10.7 7 7 0 0 0 10.7 10.7Z"
-          />
-        </svg>
-      )}
-    </button>
+      {(["light", "dark"] as const).map((value) => {
+        const active = theme === value;
+        return (
+          <button
+            key={value}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            onClick={() => choose(value)}
+            className={`min-h-[28px] rounded-[5px] px-2.5 text-[12px] font-medium leading-none transition sm:min-h-0 sm:py-[3px] ${
+              active
+                ? "bg-surface text-text shadow-[var(--shadow-control)]"
+                : "text-text-secondary hover:text-text"
+            }`}
+          >
+            {value === "light" ? "Light" : "Dark"}
+          </button>
+        );
+      })}
+    </div>
   );
 }

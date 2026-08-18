@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { EventCard } from "@/components/EventCard";
+import { Group, PageHeader } from "@/components/Group";
 
 const STATUS_TABS = [
   { value: undefined, label: "All" },
@@ -21,53 +22,57 @@ export default async function EventsPage({
   ]);
 
   return (
-    <div>
-      <div className="mb-8 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-text">Updates</h1>
-          <p className="mt-1 text-sm text-text-secondary">
-            Same feed as Telegram — models, leaks, repos, papers.
-          </p>
-        </div>
-        {health && (
-          <div className={`text-xs ${health.staleWorker ? "text-amber" : "text-text-tertiary"}`}>
-            {health.lastCrawlAgeMinutes === null
-              ? "No crawl yet"
-              : health.staleWorker
-                ? `Crawl stale · ${health.lastCrawlAgeMinutes}m ago`
-                : `Crawled ${health.lastCrawlAgeMinutes}m ago`}
-            {health.sourcesInError > 0 ? ` · ${health.sourcesInError} source errors` : ""}
-          </div>
-        )}
-      </div>
+    <div className="min-w-0">
+      <PageHeader
+        title="Updates"
+        subtitle="Models, leaks, repos, papers — same feed as Telegram."
+        trailing={
+          health ? (
+            <p
+              className={`text-[11px] tabular-nums ${health.staleWorker ? "text-amber" : "text-text-tertiary"}`}
+            >
+              {health.lastCrawlAgeMinutes === null
+                ? "No crawl yet"
+                : health.staleWorker
+                  ? `Stale · ${health.lastCrawlAgeMinutes}m`
+                  : `Updated ${health.lastCrawlAgeMinutes}m ago`}
+              {health.sourcesInError > 0 ? ` · ${health.sourcesInError} errors` : ""}
+            </p>
+          ) : null
+        }
+      />
 
-      <div className="mb-6 flex gap-1 border-b border-border pb-3">
-        {STATUS_TABS.map((tab) => (
-          <Link
-            key={tab.label}
-            href={tab.value ? `/?status=${tab.value}` : "/"}
-            className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
-              status === tab.value
-                ? "bg-bg-hover text-text"
-                : "text-text-secondary hover:bg-bg-hover hover:text-text"
-            }`}
-          >
-            {tab.label}
-          </Link>
-        ))}
+      <div className="mb-4 flex w-full rounded-[8px] bg-fill p-[2px] sm:inline-flex sm:w-auto">
+        {STATUS_TABS.map((tab) => {
+          const active = status === tab.value;
+          return (
+            <Link
+              key={tab.label}
+              href={tab.value ? `/?status=${tab.value}` : "/"}
+              className={`flex min-h-8 flex-1 items-center justify-center rounded-[6px] px-2 text-[12px] font-medium leading-none transition sm:flex-none sm:px-3 ${
+                active
+                  ? "bg-surface text-text shadow-[var(--shadow-control)]"
+                  : "text-text-secondary active:text-text sm:hover:text-text"
+              }`}
+            >
+              {tab.label}
+            </Link>
+          );
+        })}
       </div>
 
       {events.length === 0 ? (
-        <p className="text-text-secondary">
-          No events yet. GitHub Actions crawls every 5 minutes into Neon — this page reads that
-          same database.
+        <p className="px-2 py-10 text-center text-[13px] text-text-secondary">
+          No events yet. The crawler writes to Neon every few minutes.
         </p>
       ) : (
-        <div className="flex flex-col gap-3">
-          {events.map((e) => (
-            <EventCard key={e.id} event={e} />
-          ))}
-        </div>
+        <Group>
+          <div className="divide-y divide-border">
+            {events.map((e) => (
+              <EventCard key={e.id} event={e} />
+            ))}
+          </div>
+        </Group>
       )}
     </div>
   );
