@@ -10,15 +10,17 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
 
   return (
     <div>
-      <div className="mb-1 text-xs uppercase tracking-wide text-neutral-500">{event.provider.name}</div>
+      <div className="mb-1.5 text-xs font-medium uppercase tracking-wide text-text-tertiary">
+        {event.provider.name}
+      </div>
       <div className="flex items-center gap-3">
-        <h1 className="text-xl font-medium text-neutral-100">{event.title}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-text">{event.title}</h1>
         <StatusBadge status={event.status} />
       </div>
 
-      <p className="mt-3 max-w-2xl text-sm text-neutral-300">{event.summary}</p>
+      <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-text-secondary">{event.summary}</p>
 
-      <div className="mt-4 flex flex-wrap gap-x-8 gap-y-2 rounded-lg border border-neutral-800 bg-neutral-900/50 p-4 text-sm">
+      <div className="mt-6 flex flex-wrap gap-x-8 gap-y-3 rounded-xl border border-border bg-bg-inset p-4 text-sm">
         <Stat label="Confidence">
           <ConfidenceBadge confidence={event.confidence} />
         </Stat>
@@ -33,33 +35,33 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
         )}
         {event.leadTimeMinutes !== null && (
           <Stat label="Lead Time">
-            <span className="text-emerald-400">{event.leadTimeMinutes} minutes</span>
+            <span className="text-emerald">{event.leadTimeMinutes} minutes</span>
           </Stat>
         )}
         <Stat label="Alerted">{event.alertedAt ? formatDateTime(event.alertedAt) : "not yet"}</Stat>
       </div>
 
-      <h2 className="mb-3 mt-8 text-sm font-medium uppercase tracking-wide text-neutral-500">
+      <h2 className="mb-3 mt-10 text-xs font-semibold uppercase tracking-wide text-text-tertiary">
         Evidence timeline ({event.evidence.length})
       </h2>
       <div className="flex flex-col gap-3">
         {event.evidence.map((ev) => (
-          <div key={ev.id} className="rounded-lg border border-neutral-800 bg-neutral-900/50 p-4">
+          <div key={ev.id} className="rounded-xl border border-border bg-bg p-4 shadow-[var(--shadow)]">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <div className="text-xs uppercase tracking-wide text-neutral-500">
+                <div className="text-xs font-medium uppercase tracking-wide text-text-tertiary">
                   {ev.signalType} · +{ev.confidenceContribution} confidence
                 </div>
-                <div className="mt-0.5 text-sm font-medium text-neutral-200">{ev.title}</div>
-                <p className="mt-1 text-sm text-neutral-400">{ev.description}</p>
+                <div className="mt-0.5 text-sm font-semibold text-text">{ev.title}</div>
+                <p className="mt-1 text-sm text-text-secondary">{ev.description}</p>
               </div>
-              <div className="shrink-0 text-right text-xs text-neutral-500">{relativeTime(ev.detectedAt)}</div>
+              <div className="shrink-0 text-right text-xs text-text-tertiary">{relativeTime(ev.detectedAt)}</div>
             </div>
             <a
               href={ev.source.url}
               target="_blank"
               rel="noreferrer"
-              className="mt-2 inline-block text-xs text-neutral-500 hover:text-neutral-300 hover:underline"
+              className="mt-2 inline-block text-xs text-text-tertiary hover:text-accent-text hover:underline"
             >
               [{ev.source.type.toUpperCase()}] {ev.source.name} → {ev.source.url}
             </a>
@@ -73,8 +75,8 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
 function Stat({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="text-xs text-neutral-500">{label}</div>
-      <div className="text-neutral-200">{children}</div>
+      <div className="text-xs text-text-tertiary">{label}</div>
+      <div className="mt-0.5 text-text">{children}</div>
     </div>
   );
 }

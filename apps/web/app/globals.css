@@ -1,10 +1,97 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+:root {
+  --bg: #ffffff;
+  --bg-inset: #fbfbfa;
+  --bg-hover: #f2f1ee;
+  --bg-active: #ebeae7;
+  --border: #ebebe9;
+  --border-strong: #dedcd9;
+  --text: #1b1b18;
+  --text-secondary: #6f6e69;
+  --text-tertiary: #9b9a95;
+  --accent: #0071e3;
+  --accent-text: #0071e3;
+  --accent-soft: #eaf3fd;
+  --amber: #a9720a;
+  --amber-soft: #fbf1de;
+  --emerald: #1a8a5f;
+  --emerald-soft: #e6f5ee;
+  --neutral-soft: #f0efec;
+  --sky: #1478c9;
+  --shadow: 0 1px 2px rgba(20, 20, 19, 0.04), 0 1px 8px rgba(20, 20, 19, 0.03);
+  --shadow-hover: 0 2px 6px rgba(20, 20, 19, 0.06), 0 8px 24px rgba(20, 20, 19, 0.06);
+}
+
+[data-theme="dark"] {
+  --bg: #1b1b1a;
+  --bg-inset: #202020;
+  --bg-hover: #2a2a28;
+  --bg-active: #323230;
+  --border: #2e2e2c;
+  --border-strong: #3d3d3a;
+  --text: #eeeeec;
+  --text-secondary: #a3a29d;
+  --text-tertiary: #7a7975;
+  --accent: #2f9bf5;
+  --accent-text: #4dabf7;
+  --accent-soft: #16283a;
+  --amber: #e0ac4c;
+  --amber-soft: #332711;
+  --emerald: #4fcc94;
+  --emerald-soft: #10291f;
+  --neutral-soft: #262625;
+  --sky: #57adf2;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 1px 8px rgba(0, 0, 0, 0.16);
+  --shadow-hover: 0 2px 6px rgba(0, 0, 0, 0.24), 0 8px 24px rgba(0, 0, 0, 0.28);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-inset: var(--bg-inset);
+  --color-bg-hover: var(--bg-hover);
+  --color-bg-active: var(--bg-active);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-text: var(--text);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+  --color-accent: var(--accent);
+  --color-accent-text: var(--accent-text);
+  --color-accent-soft: var(--accent-soft);
+  --color-amber: var(--amber);
+  --color-amber-soft: var(--amber-soft);
+  --color-emerald: var(--emerald);
+  --color-emerald-soft: var(--emerald-soft);
+  --color-neutral-soft: var(--neutral-soft);
+  --color-sky: var(--sky);
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Helvetica Neue",
+    ui-sans-serif, system-ui, sans-serif;
+}
+
 html {
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
   color-scheme: dark;
 }
 
+* {
+  border-color: var(--border);
+}
+
 body {
-  background: #0a0a0a;
-  color: #e5e5e5;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--accent-text);
 }
