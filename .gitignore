@@ -6,5 +6,6 @@ build/
 .next/
 *.log
 .DS_Store
+.vercel/
 .snapshots/
 *.tsbuildinfo
