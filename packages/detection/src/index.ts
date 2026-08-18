@@ -7,3 +7,6 @@ export * from "./confidence";
 export * from "./correlation";
 export * from "./eventAggregate";
 export * from "./alertFormat";
+export * from "./publicUrl";
+export * from "./quality";
+export * from "./dedup";

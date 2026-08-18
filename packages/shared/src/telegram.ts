@@ -11,7 +11,10 @@ export function isTelegramConfigured(): boolean {
   return Boolean(env.telegramBotToken && env.telegramChatId);
 }
 
-export async function sendTelegramMessage(text: string): Promise<TelegramSendResult> {
+export async function sendTelegramMessage(
+  text: string,
+  opts: { preview?: boolean } = {},
+): Promise<TelegramSendResult> {
   const token = env.telegramBotToken;
   const chatId = env.telegramChatId;
   if (!token || !chatId) {
@@ -27,7 +30,7 @@ export async function sendTelegramMessage(text: string): Promise<TelegramSendRes
         chat_id: chatId,
         text,
         parse_mode: "HTML",
-        disable_web_page_preview: true,
+        disable_web_page_preview: opts.preview === true ? false : true,
       }),
     });
 

@@ -80,8 +80,12 @@ export function findMatchingEvent(
 }
 
 /** Official-announcement channels are the only ones that flip PRE_ANNOUNCEMENT -> CONFIRMED. */
-export function isAnnouncementSource(sourceType: string): boolean {
-  return ANNOUNCEMENT_SOURCE_TYPES.has(sourceType);
+export function isAnnouncementSource(sourceType: string, sourceUrl?: string): boolean {
+  if (!ANNOUNCEMENT_SOURCE_TYPES.has(sourceType)) return false;
+  if (sourceUrl && (/api\.github\.com\/search/i.test(sourceUrl) || /github\.com\/trending/i.test(sourceUrl))) {
+    return false;
+  }
+  return true;
 }
 
 export function computeLeadTimeMinutes(firstDetectedAt: Date, announcedAt: Date): number {

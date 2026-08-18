@@ -4,17 +4,24 @@ import {
   events as eventsTable,
   eventSignals as eventSignalsTable,
   providers as providersTable,
+  alertFingerprints as fingerprintsTable,
 } from "@ai-radar/db";
-import { and, eq, gte, isNull, or } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, or } from "drizzle-orm";
 import {
   findMatchingEvent,
   isAnnouncementSource,
   computeLeadTimeMinutes,
   buildEventAggregate,
   formatTelegramAlert,
+  resolvePublicSourceUrl,
+  isMachineUrl,
+  isHighSignalAlert,
+  whyItMatters,
+  buildAlertFingerprints,
   MAX_EVENT_OPEN_MS,
   type EventRecord,
   type SignalRecord,
+  type QualitySignal,
 } from "@ai-radar/detection";
 import {
   sendTelegramMessage,
@@ -23,6 +30,8 @@ import {
   ALERT_MAX_AGE_MS,
   type EvidenceItem,
 } from "@ai-radar/shared";
+
+const FINGERPRINT_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 
 /**
  * Pulls every uncorrelated signal (oldest first) and either attaches it to a
@@ -35,6 +44,8 @@ import {
  * paged — that blocks sweep backfills of stale news.
  */
 export async function runCorrelation(): Promise<{ correlated: number; alerted: number; alertFailed: number }> {
+  await backfillAlertFingerprints();
+
   const pending = await db.query.signals.findMany({
     where: eq(signalsTable.correlated, false),
     orderBy: (s, { asc }) => [asc(s.detectedAt)],
@@ -210,7 +221,68 @@ async function createEvent(
   return row!.id;
 }
 
-type AlertOutcome = "alerted" | "alert_failed" | "skipped" | "updated";
+type AlertOutcome = "alerted" | "alert_failed" | "skipped" | "updated" | "suppressed";
+
+function publicUrlFromEvidence(raw: Record<string, unknown>, entity: string | null): string {
+  return resolvePublicSourceUrl({
+    crawlUrl: String(raw.crawlUrl ?? raw.sourceUrl ?? ""),
+    sourceType: typeof raw.sourceType === "string" ? raw.sourceType : undefined,
+    sourceName: typeof raw.sourceName === "string" ? raw.sourceName : undefined,
+    itemUrl: typeof raw.itemUrl === "string" ? raw.itemUrl : typeof raw.url === "string" ? raw.url : null,
+    modelId: typeof raw.modelId === "string" ? raw.modelId : null,
+    hfRepo: typeof raw.hfRepo === "string" ? raw.hfRepo : null,
+    repo: typeof raw.repo === "string" ? raw.repo : null,
+    paperId: typeof raw.paperId === "string" ? raw.paperId : null,
+    entity,
+  });
+}
+
+async function backfillAlertFingerprints(): Promise<void> {
+  const cutoff = new Date(Date.now() - FINGERPRINT_TTL_MS);
+  const recent = await db.query.events.findMany({
+    where: gte(eventsTable.alertedAt, cutoff),
+    columns: { id: true, title: true, entity: true },
+    limit: 250,
+  });
+  for (const e of recent) {
+    await persistFingerprints(
+      e.id,
+      buildAlertFingerprints({ publicUrl: "", title: e.title, entity: e.entity, providerName: "" }),
+    );
+  }
+}
+
+async function matchingFingerprint(
+  fps: ReturnType<typeof buildAlertFingerprints>,
+): Promise<string | null> {
+  if (fps.length === 0) return null;
+  const cutoff = new Date(Date.now() - FINGERPRINT_TTL_MS);
+  const rows = await db
+    .select({ fingerprint: fingerprintsTable.fingerprint })
+    .from(fingerprintsTable)
+    .where(
+      and(
+        inArray(
+          fingerprintsTable.fingerprint,
+          fps.map((f) => f.fingerprint),
+        ),
+        gte(fingerprintsTable.createdAt, cutoff),
+      ),
+    )
+    .limit(1);
+  return rows[0]?.fingerprint ?? null;
+}
+
+async function persistFingerprints(
+  eventId: number,
+  fps: ReturnType<typeof buildAlertFingerprints>,
+): Promise<void> {
+  if (fps.length === 0) return;
+  await db
+    .insert(fingerprintsTable)
+    .values(fps.map((f) => ({ fingerprint: f.fingerprint, kind: f.kind, eventId })))
+    .onConflictDoNothing({ target: fingerprintsTable.fingerprint });
+}
 
 async function recomputeAndMaybeAlert(
   eventId: number,
@@ -278,6 +350,25 @@ async function recomputeAndMaybeAlert(
   const meetsAlertBar = meetsAlertThreshold(aggregate.confidence, aggregate.importance, { official });
   const fresh = isAlertFresh(event.firstDetectedAt, now);
 
+  const qualitySignals: QualitySignal[] = links.map((l) => ({
+    title: l.signal.title,
+    description: l.signal.description,
+    sourceType: l.signal.sourceType,
+    entity: l.signal.entity,
+    suggestedEventType: l.signal.suggestedEventType,
+    evidence: (l.signal.evidence ?? {}) as Record<string, unknown>,
+  }));
+  const quality = {
+    eventType: aggregate.type,
+    title: aggregate.title,
+    summary: aggregate.summary,
+    entity: aggregate.entity,
+    importance: aggregate.importance,
+    confidence: aggregate.confidence,
+    official,
+    signals: qualitySignals,
+  };
+
   if (meetsAlertBar && !event.alertedAt && !fresh) {
     console.log(
       `[alert] skipped stale event #${eventId} firstDetected=${event.firstDetectedAt.toISOString()} ` +
@@ -286,31 +377,66 @@ async function recomputeAndMaybeAlert(
     return "skipped";
   }
 
+  if (meetsAlertBar && !event.alertedAt && !isHighSignalAlert(quality)) {
+    await db
+      .update(eventsTable)
+      .set({ status: "DISMISSED", updatedAt: now })
+      .where(eq(eventsTable.id, eventId));
+    console.log(
+      `[alert] suppressed low-signal event #${eventId} ${aggregate.type} "${aggregate.title}"`,
+    );
+    return "suppressed";
+  }
+
   if (meetsAlertBar && !event.alertedAt) {
-    const evidence: EvidenceItem[] = links.map((l) => ({
-      sourceUrl: (l.signal.evidence as { sourceUrl?: string }).sourceUrl ?? "",
-      sourceType: l.signal.sourceType,
-      signalType: l.signal.signalType,
-      summary: l.signal.title,
-      detectedAt: l.signal.detectedAt.toISOString(),
-      confidenceContribution: l.signal.confidenceContribution,
-    }));
+    const evidence: EvidenceItem[] = links.map((l) => {
+      const raw = (l.signal.evidence ?? {}) as Record<string, unknown>;
+      return {
+        sourceUrl: publicUrlFromEvidence(raw, l.signal.entity ?? aggregate.entity),
+        sourceType: l.signal.sourceType,
+        signalType: l.signal.signalType,
+        summary: l.signal.title,
+        detectedAt: l.signal.detectedAt.toISOString(),
+        confidenceContribution: l.signal.confidenceContribution,
+        sourceName: typeof raw.sourceName === "string" ? raw.sourceName : undefined,
+        stars: typeof raw.stars === "number" ? raw.stars : undefined,
+      };
+    });
+
+    const primaryUrl = evidence.find((e) => e.sourceUrl)?.sourceUrl ?? "";
+    const fps = buildAlertFingerprints({
+      publicUrl: primaryUrl,
+      title: aggregate.title,
+      entity: aggregate.entity,
+      providerName,
+    });
+    const dup = await matchingFingerprint(fps);
+    if (dup) {
+      await db.update(eventsTable).set({ alertedAt: now, updatedAt: now }).where(eq(eventsTable.id, eventId));
+      console.log(`[alert] deduped event #${eventId} via ${dup} "${aggregate.title}"`);
+      return "suppressed";
+    }
 
     const message = formatTelegramAlert({
       providerName,
       title: aggregate.title,
+      summary: aggregate.summary,
+      entity: aggregate.entity,
+      eventType: aggregate.type,
       confidence: aggregate.confidence,
       importance: aggregate.importance,
       status,
       firstDetectedAt: event.firstDetectedAt,
       evidence,
+      whyItMatters: whyItMatters(quality),
     });
 
-    const send = await sendTelegramMessage(message);
+    const send = await sendTelegramMessage(message, { preview: Boolean(primaryUrl) && !isMachineUrl(primaryUrl) });
     if (send.ok) {
       await db.update(eventsTable).set({ alertedAt: now }).where(eq(eventsTable.id, eventId));
+      await persistFingerprints(eventId, fps);
       console.log(
-        `[alert] SENT event #${eventId} conf=${aggregate.confidence} imp=${aggregate.importance} "${aggregate.title}"`,
+        `[alert] SENT event #${eventId} conf=${aggregate.confidence} imp=${aggregate.importance} "${aggregate.title}" → ${primaryUrl}`,
       );
       return "alerted";
     }

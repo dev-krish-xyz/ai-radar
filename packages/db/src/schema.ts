@@ -134,6 +134,21 @@ export const events = pgTable(
   ],
 );
 
+export const alertFingerprints = pgTable(
+  "alert_fingerprints",
+  {
+    id: serial("id").primaryKey(),
+    fingerprint: text("fingerprint").notNull(),
+    kind: text("kind").notNull(),
+    eventId: integer("event_id").references(() => events.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("alert_fingerprints_fp_idx").on(t.fingerprint),
+    index("alert_fingerprints_created_idx").on(t.createdAt),
+  ],
+);
+
 export const eventSignals = pgTable(
   "event_signals",
   {

@@ -147,4 +147,6 @@ export interface EvidenceItem {
   detectedAt: string;
   confidenceContribution: number;
   diffExcerpt?: string;
+  sourceName?: string;
+  stars?: number;
 }

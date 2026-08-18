@@ -1,6 +1,7 @@
 import type { DiffClassification } from "@ai-radar/shared";
 import type { EventType, SignalType } from "@ai-radar/shared";
 import type { DetectionContext, RawSignal } from "./types";
+import { resolvePublicSourceUrl } from "./publicUrl";
 
 /** Best-fit SignalType for an LLM-derived EventType, used only for confidence weighting. */
 const EVENT_TYPE_TO_SIGNAL_TYPE: Record<EventType, SignalType> = {
@@ -36,6 +37,12 @@ export function signalFromLlmClassification(
 
   const signalType = EVENT_TYPE_TO_SIGNAL_TYPE[classification.eventType];
   const baseWeight = weightTable[signalType];
+  const publicUrl = resolvePublicSourceUrl({
+    crawlUrl: ctx.sourceUrl,
+    sourceType: ctx.sourceType,
+    sourceName: ctx.sourceName,
+    entity: classification.entity,
+  });
 
   return {
     signalType,
@@ -44,7 +51,8 @@ export function signalFromLlmClassification(
     title: classification.title,
     description: classification.summary,
     evidence: {
-      sourceUrl: ctx.sourceUrl,
+      crawlUrl: ctx.sourceUrl,
+      sourceUrl: publicUrl,
       sourceName: ctx.sourceName,
       sourceType: ctx.sourceType,
       llmClassified: true,
@@ -55,7 +63,7 @@ export function signalFromLlmClassification(
     sourceId: ctx.sourceId,
     providerId: ctx.providerId,
     sourceType: ctx.sourceType,
-    sourceUrl: ctx.sourceUrl,
+    sourceUrl: publicUrl,
     detectedAt: now,
   };
 }

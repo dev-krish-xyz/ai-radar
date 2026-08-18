@@ -2,6 +2,8 @@ import type { LineDiff, JsonDiff } from "@ai-radar/crawler";
 import type { DetectionContext, RawSignal } from "./types";
 import { DEFAULT_IMPORTANCE_BY_EVENT_TYPE } from "./importance";
 import { SIGNAL_CONFIDENCE_WEIGHTS, type SignalType, type EventType } from "@ai-radar/shared";
+import { resolvePublicSourceUrl } from "./publicUrl";
+import { MIN_RISING_STARS } from "./quality";
 import {
   MODEL_ID_PATTERN,
   HF_REPO_PATTERN,
@@ -39,6 +41,18 @@ function makeSignal(
   detectedAt: Date,
   confidenceOverride?: number,
 ): RawSignal {
+  const extra = { ...evidenceExtra };
+  const publicUrl = resolvePublicSourceUrl({
+    crawlUrl: ctx.sourceUrl,
+    sourceType: ctx.sourceType,
+    sourceName: ctx.sourceName,
+    itemUrl: typeof extra.itemUrl === "string" ? extra.itemUrl : typeof extra.url === "string" ? extra.url : null,
+    modelId: typeof extra.modelId === "string" ? extra.modelId : null,
+    hfRepo: typeof extra.hfRepo === "string" ? extra.hfRepo : null,
+    repo: typeof extra.repo === "string" ? extra.repo : null,
+    paperId: typeof extra.paperId === "string" ? extra.paperId : null,
+    entity,
+  });
   return {
     signalType,
     suggestedEventType,
@@ -46,17 +60,18 @@ function makeSignal(
     title,
     description,
     evidence: {
-      sourceUrl: ctx.sourceUrl,
+      crawlUrl: ctx.sourceUrl,
       sourceName: ctx.sourceName,
       sourceType: ctx.sourceType,
-      ...evidenceExtra,
+      ...extra,
+      sourceUrl: publicUrl,
     },
     confidenceContribution: confidenceOverride ?? SIGNAL_CONFIDENCE_WEIGHTS[signalType],
     importanceHint: DEFAULT_IMPORTANCE_BY_EVENT_TYPE[suggestedEventType],
     sourceId: ctx.sourceId,
     providerId: ctx.providerId,
     sourceType: ctx.sourceType,
-    sourceUrl: ctx.sourceUrl,
+    sourceUrl: publicUrl,
     detectedAt,
   };
 }
@@ -130,7 +145,7 @@ export function detectSignals(input: RuleInput, now: Date = new Date()): RawSign
 
   // RSS / social: only fire on model IDs, leak language, or provider+launch verb.
   if (isFeed || ctx.sourceType === "social") {
-    signals.push(...detectFeedHeadlineSignals(ctx, lineDiff, oldContent, now));
+    signals.push(...detectFeedHeadlineSignals(ctx, lineDiff, oldContent, newContent, now));
   }
 
   // Deprecation language matters everywhere providers write prose.
@@ -184,18 +199,23 @@ function detectCatalogModelSignals(ctx: DetectionContext, jsonDiff: JsonDiff, no
   // Cap fan-out — a bulk import shouldn't spam 40 events.
   const isHfCatalog =
     ctx.sourceUrl.includes("huggingface.co") || /hugging\s*face/i.test(ctx.sourceName);
-  return [...candidates].slice(0, 5).map((id) =>
-    makeSignal(
-      ctx,
-      "new_model_id",
-      /preview|instruct-preview/i.test(id) ? "MODEL_PREVIEW" : "MODEL_LAUNCH",
-      id,
-      isHfCatalog ? `New Hugging Face model: ${id}` : `New model ID in catalog: ${id}`,
-      `"${id}" appeared in ${ctx.sourceName} and was not in the previous catalog snapshot.`,
-      { modelId: id, hfRepo: isHfCatalog ? id : undefined, latestChanged: latestChange?.to === id, role: "lead" },
-      now,
-    ),
-  );
+  const JUNK_MODEL =
+    /(gguf|q[2-8]_k|q[2-8]_0|imatrix|-lora\b|-qlora|-awq|-gptq|-exl2|eval-|test-|dummy-|sample-|tokenizer)/i;
+  return [...candidates]
+    .filter((id) => !JUNK_MODEL.test(id))
+    .slice(0, 5)
+    .map((id) =>
+      makeSignal(
+        ctx,
+        "new_model_id",
+        /preview|instruct-preview/i.test(id) ? "MODEL_PREVIEW" : "MODEL_LAUNCH",
+        id,
+        isHfCatalog ? `New Hugging Face model: ${id}` : `New model ID in catalog: ${id}`,
+        `"${id}" appeared in ${ctx.sourceName} and was not in the previous catalog snapshot.`,
+        { modelId: id, hfRepo: isHfCatalog ? id : undefined, latestChanged: latestChange?.to === id, role: "lead" },
+        now,
+      ),
+    );
 }
 
 /** HTML/fallback HF pages: catch newly added org/model lines. */
@@ -234,10 +254,21 @@ function detectHfRepoLineSignals(
  * Feed headlines: fire only when the TITLE has a model ID, leak language,
  * or (provider name + launch/release verb). Bare "AI" keywords are not enough.
  */
+function feedItemLink(newContent: string, title: string): string | null {
+  const blocks = newContent.split(/\n---\n/);
+  for (const block of blocks) {
+    if (!block.includes(`TITLE: ${title}`)) continue;
+    const m = block.match(/^LINK:\s*(\S+)/m);
+    if (m?.[1]) return m[1].trim();
+  }
+  return null;
+}
+
 function detectFeedHeadlineSignals(
   ctx: DetectionContext,
   lineDiff: LineDiff,
   oldContent: string,
+  newContent: string,
   now: Date,
 ): RawSignal[] {
   const titleLines = lineDiff.added.filter((l) => l.startsWith("TITLE: "));
@@ -270,6 +301,7 @@ function detectFeedHeadlineSignals(
           ? "MODEL_PREVIEW"
           : "NEW_PRODUCT";
     const signalType = hasModel ? "new_model_id" : hasLeak || hasCodename ? "other" : "product_launch";
+    const itemUrl = feedItemLink(newContent, title);
 
     signals.push(
       makeSignal(
@@ -279,7 +311,7 @@ function detectFeedHeadlineSignals(
         entity,
         entity ? `Feed: ${entity} — ${title.slice(0, 120)}` : `Feed: ${title.slice(0, 160)}`,
         `New headline on ${ctx.sourceName}: ${title}`,
-        { headline: title.slice(0, 300), leak: hasLeak, role: "context" },
+        { headline: title.slice(0, 300), leak: hasLeak, role: "context", itemUrl, url: itemUrl },
         now,
       ),
     );
@@ -606,7 +638,16 @@ function detectDiscoveredRepoSignals(
   if (fresh.length === 0) return [];
 
   const details = parseDetails(newContent);
-  return fresh.slice(0, DISCOVERY_ALERT_CAP).map((fullName) => {
+  return fresh
+    .filter((fullName) => {
+      const stars = details[fullName]?.stars;
+      // Search API rows have a real count; trending HTML leaves stars at 0.
+      if (typeof stars !== "number") return true;
+      if (stars >= MIN_RISING_STARS) return true;
+      return stars === 0 && /trending/i.test(`${ctx.sourceUrl} ${ctx.sourceName}`);
+    })
+    .slice(0, DISCOVERY_ALERT_CAP)
+    .map((fullName) => {
     const meta = details[fullName] ?? {};
     const stars = typeof meta.stars === "number" ? meta.stars : null;
     const desc = typeof meta.description === "string" ? meta.description : "";
@@ -635,8 +676,16 @@ function detectDailyPaperSignals(
   const fresh = parseStringList(newContent, "papers").filter((id) => !oldSet.has(id));
   if (fresh.length === 0) return [];
 
+  const HIGH_PAPER =
+    /\b(sota|state[- ]of[- ]the[- ]art|beats|outperform|foundation model|reasoning|agentic|computer[- ]use|open[- ]weights?|new model|multimodal|benchmark)\b/i;
   const details = parseDetails(newContent);
-  return fresh.slice(0, DISCOVERY_ALERT_CAP).map((id) => {
+  return fresh
+    .filter((id) => {
+      const title = String(details[id]?.title ?? id);
+      return HIGH_PAPER.test(title);
+    })
+    .slice(0, DISCOVERY_ALERT_CAP)
+    .map((id) => {
     const meta = details[id] ?? {};
     const title = typeof meta.title === "string" ? meta.title : id;
     const url = typeof meta.url === "string" ? meta.url : `https://huggingface.co/papers/${id}`;

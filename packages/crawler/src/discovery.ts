@@ -33,7 +33,7 @@ export function normalizeRepoList(repos: DiscoveredRepo[]): string {
 export function buildRisingReposSearchUrl(now: Date = new Date()): string {
   const since = new Date(now.getTime() - 7 * 24 * 60 * 60_000).toISOString().slice(0, 10);
   // No parentheses — GitHub Search returns 422 on grouped OR + qualifier.
-  const q = `llm OR mcp OR vllm OR ollama OR grok OR rag created:>${since} stars:>=30`;
+  const q = `llm OR mcp OR vllm OR ollama OR grok OR rag created:>${since} stars:>=50`;
   const url = new URL("https://api.github.com/search/repositories");
   url.searchParams.set("q", q);
   url.searchParams.set("sort", "stars");

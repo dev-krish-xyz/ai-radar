@@ -46,14 +46,14 @@ export const earlyRadar: ProviderConfig = {
     {
       name: "Rising AI repos (GitHub search)",
       url: "https://api.github.com/search/repositories?q=llm",
-      type: "product_page",
+      type: "social",
       crawlIntervalMinutes: 15,
     },
     // context: AI-filtered daily trending — alert only on new entries
     {
       name: "GitHub Trending (AI-filtered)",
       url: "https://github.com/trending?since=daily",
-      type: "product_page",
+      type: "social",
       crawlIntervalMinutes: 30,
     },
     {

@@ -65,6 +65,10 @@ packages/
    after a successful send — failures retry on later ticks. Events whose
    `firstDetectedAt` is older than 48h (`ALERT_MAX_AGE_MS`) are never sent,
    including sweep retries — that blocks deploy/backfill pages of stale news.
+   Before send: `isHighSignalAlert` drops SDK bumps, junk HF uploads, low-star
+   repos, and generic papers; `alert_fingerprints` persist URL/title/entity/story
+   keys for 14 days so the same story is not re-paged after a restart. Telegram
+   cards link the human page (`resolvePublicSourceUrl`), never the crawl API/JSON.
 
 ### Confirmation
 
