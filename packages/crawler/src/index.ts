@@ -8,4 +8,6 @@ export * from "./rss";
 export * from "./modelCatalog";
 export * from "./discovery";
 export * from "./hfPapers";
+export * from "./hn";
+export * from "./openrouter";
 export * from "./rateLimiter";

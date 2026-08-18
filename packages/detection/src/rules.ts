@@ -110,6 +110,9 @@ export function detectSignals(input: RuleInput, now: Date = new Date()): RawSign
     if (newContent.includes('"papers"') && newContent.includes('"details"')) {
       signals.push(...detectDailyPaperSignals(ctx, oldContent, newContent, now));
     }
+    if (newContent.includes('"stories"') && newContent.includes('"details"')) {
+      signals.push(...detectHnStorySignals(ctx, oldContent, newContent, now));
+    }
   }
 
   if (ctx.sourceType === "github_releases") {
@@ -199,10 +202,13 @@ function detectCatalogModelSignals(ctx: DetectionContext, jsonDiff: JsonDiff, no
   // Cap fan-out — a bulk import shouldn't spam 40 events.
   const isHfCatalog =
     ctx.sourceUrl.includes("huggingface.co") || /hugging\s*face/i.test(ctx.sourceName);
+  const isOpenRouter = /openrouter/i.test(`${ctx.sourceUrl} ${ctx.sourceName}`);
   const JUNK_MODEL =
     /(gguf|q[2-8]_k|q[2-8]_0|imatrix|-lora\b|-qlora|-awq|-gptq|-exl2|eval-|test-|dummy-|sample-|tokenizer)/i;
+  const OPENROUTER_KEEP = /^(openai|anthropic|google|x-ai|meta-llama|deepseek|mistralai|qwen)\//i;
   return [...candidates]
     .filter((id) => !JUNK_MODEL.test(id))
+    .filter((id) => !isOpenRouter || (OPENROUTER_KEEP.test(id) && !/:(free|nitro|extended)/i.test(id)))
     .slice(0, 5)
     .map((id) =>
       makeSignal(
@@ -605,7 +611,7 @@ function detectSdkVersionSignals(ctx: DetectionContext, jsonDiff: JsonDiff, now:
 const DISCOVERY_ALERT_CAP = 3;
 const DISCOVERY_CONFIDENCE = 40;
 
-function parseStringList(content: string, key: "repos" | "papers"): string[] {
+function parseStringList(content: string, key: "repos" | "papers" | "stories"): string[] {
   try {
     const parsed = JSON.parse(content) as Record<string, unknown>;
     const arr = parsed[key];
@@ -703,12 +709,62 @@ function detectDailyPaperSignals(
   });
 }
 
+function detectHnStorySignals(
+  ctx: DetectionContext,
+  oldContent: string,
+  newContent: string,
+  now: Date,
+): RawSignal[] {
+  const oldSet = new Set(parseStringList(oldContent, "stories"));
+  const fresh = parseStringList(newContent, "stories").filter((id) => !oldSet.has(id));
+  if (fresh.length === 0) return [];
+
+  const details = parseDetails(newContent);
+  return fresh.slice(0, DISCOVERY_ALERT_CAP).map((id) => {
+    const meta = details[id] ?? {};
+    const title = typeof meta.title === "string" ? meta.title : id;
+    const url = typeof meta.url === "string" ? meta.url : `https://news.ycombinator.com/item?id=${id}`;
+    const points = typeof meta.points === "number" ? meta.points : 0;
+    return makeSignal(
+      ctx,
+      "product_launch",
+      "NEW_PRODUCT",
+      null,
+      `HN: ${title.slice(0, 140)}`,
+      `${title} (${points} points)`,
+      { hnId: id, url, itemUrl: url, points, role: "lead", postable: true },
+      now,
+      DISCOVERY_CONFIDENCE,
+    );
+  });
+}
+
 /** A single-line diff this long is prose (a post title, a caption), not a counter/version bump. */
 const SUBSTANTIAL_SINGLE_LINE_CHARS = 40;
 
-/** True when a diff has enough substance to be worth an LLM semantic-significance check. */
-export function needsSemanticReview(lineDiff: LineDiff, alreadyFiredRuleSignals: number): boolean {
+const PROSE_SOURCE_TYPES = new Set(["blog", "changelog", "docs", "social", "product_page", "pricing"]);
+
+export interface SemanticReviewOpts {
+  sourceType?: string;
+  newContent?: string;
+}
+
+/** True when a prose diff is worth an LLM check. Never burn Groq on registries or set-diff JSON. */
+export function needsSemanticReview(
+  lineDiff: LineDiff,
+  alreadyFiredRuleSignals: number,
+  opts: SemanticReviewOpts = {},
+): boolean {
   if (alreadyFiredRuleSignals > 0) return false;
+  if (opts.sourceType === "sdk_npm" || opts.sourceType === "sdk_pypi") return false;
+  if (opts.sourceType === "github_releases") return false;
+  const content = opts.newContent ?? "";
+  if (content.includes('"repos"') && content.includes('"details"')) return false;
+  if (content.includes('"papers"') && content.includes('"details"')) return false;
+  if (content.includes('"stories"') && content.includes('"details"')) return false;
+  if (content.includes('"models"') && content.includes('"count"')) return false;
+  if (content.startsWith("FEED_ITEMS:")) return false;
+  if (opts.sourceType && !PROSE_SOURCE_TYPES.has(opts.sourceType)) return false;
   if (lineDiff.added.length >= 2 || lineDiff.removed.length >= 2) return true;
   return [...lineDiff.added, ...lineDiff.removed].some((l) => l.length >= SUBSTANTIAL_SINGLE_LINE_CHARS);
 }

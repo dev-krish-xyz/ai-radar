@@ -40,32 +40,52 @@ function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
   return union === 0 ? 0 : intersection / union;
 }
 
+export const CROSS_PROVIDER_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 /**
  * Finds an existing open event this signal should be grouped into (same provider,
  * within the time-proximity window, and matching by entity or semantic similarity).
- * Returns null when the signal should seed a brand-new event instead.
+ * When `crossProvider` is set, a strong entity match can join another provider's
+ * story so catalog + HN + news become one event.
  */
 export function findMatchingEvent(
   signal: Pick<SignalRecord, "entity" | "title" | "description" | "detectedAt">,
   providerId: number,
   candidateEvents: EventRecord[],
   now: Date = new Date(),
+  opts: { crossProvider?: boolean } = {},
 ): EventRecord | null {
-  const open = candidateEvents.filter(
+  const sameProvider = candidateEvents.filter(
     (e) =>
       e.providerId === providerId &&
       e.status === "PRE_ANNOUNCEMENT" &&
       now.getTime() - e.updatedAt.getTime() <= CORRELATION_WINDOW_MS &&
       now.getTime() - e.firstDetectedAt.getTime() <= MAX_EVENT_OPEN_MS,
   );
-  if (open.length === 0) return null;
 
-  if (signal.entity) {
-    const entityMatch = open
+  const tryEntity = (pool: EventRecord[]): EventRecord | undefined => {
+    if (!signal.entity) return undefined;
+    return pool
       .filter((e) => e.entity && entitiesMatch(e.entity, signal.entity!))
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())[0];
-    if (entityMatch) return entityMatch;
+  };
+
+  const localEntity = tryEntity(sameProvider);
+  if (localEntity) return localEntity;
+
+  if (opts.crossProvider && signal.entity && signal.entity.replace(/[^a-z0-9]/gi, "").length >= 5) {
+    const cross = candidateEvents.filter(
+      (e) =>
+        e.providerId !== providerId &&
+        (e.status === "PRE_ANNOUNCEMENT" || e.status === "CONFIRMED") &&
+        now.getTime() - e.firstDetectedAt.getTime() <= CROSS_PROVIDER_WINDOW_MS,
+    );
+    const hit = tryEntity(cross);
+    if (hit) return hit;
   }
+
+  const open = sameProvider;
+  if (open.length === 0) return null;
 
   const signalTokens = tokenize(`${signal.title} ${signal.description}`);
   let best: { event: EventRecord; score: number } | null = null;

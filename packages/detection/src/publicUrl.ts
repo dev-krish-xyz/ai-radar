@@ -86,6 +86,7 @@ function catalogLandingPage(crawlUrl: string, sourceName?: string): string | nul
   if (blob.includes("x.ai") || blob.includes("xai") || blob.includes("grok")) {
     return "https://docs.x.ai/developers/models";
   }
+  if (blob.includes("openrouter")) return "https://openrouter.ai/models";
   return null;
 }
 

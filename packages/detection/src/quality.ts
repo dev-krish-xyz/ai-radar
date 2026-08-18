@@ -50,6 +50,10 @@ function isDailyPaper(s: QualitySignal): boolean {
   return Boolean(s.evidence.paperId) || /hf daily paper/i.test(s.title);
 }
 
+function isHnStory(s: QualitySignal): boolean {
+  return Boolean(s.evidence.hnId) || /^HN:/i.test(s.title);
+}
+
 function maxStars(signals: QualitySignal[]): number {
   let max = 0;
   for (const s of signals) {
@@ -71,6 +75,7 @@ export function whyItMatters(input: QualityInput): string {
     return "New AI repo climbing GitHub before recap accounts pick it up.";
   }
   if (input.signals.some(isDailyPaper)) return "New paper on HF Daily — early research angle.";
+  if (input.signals.some(isHnStory)) return "Climbing Hacker News in the last 4 hours — early social proof.";
   if (COMPANY_NEWS.test(blob)) return "Company-level news (revenue / funding / deal).";
   if (input.official) return "Official announcement channel.";
   if (input.eventType === "NEW_PRODUCT") return "New product / feature worth a timely post.";
@@ -102,6 +107,11 @@ export function isHighSignalAlert(input: QualityInput): boolean {
 
   if (input.signals.some(isDailyPaper)) {
     return HIGH_PAPER.test(blob);
+  }
+
+  if (input.signals.some(isHnStory)) {
+    const pts = input.signals.map((s) => s.evidence.points).find((n) => typeof n === "number");
+    return typeof pts !== "number" || pts >= 15;
   }
 
   if (LOW_EVENT_TYPES.has(input.eventType) && !leak) return false;

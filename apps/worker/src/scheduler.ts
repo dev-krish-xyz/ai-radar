@@ -7,6 +7,7 @@ import {
 import { eq, sql } from "drizzle-orm";
 import { processSource } from "./pipeline";
 import { runCorrelation } from "./correlate";
+import { resetGroqTickBudget } from "@ai-radar/shared";
 
 /** Parallel fetches; host-level rate limiter still serializes same-host requests. */
 const CONCURRENCY = 5;
@@ -30,6 +31,7 @@ export interface TickSummary {
 
 /** Runs one crawl tick: crawls every due, enabled source (bounded concurrency), then correlates. */
 export async function runTick(): Promise<TickSummary> {
+  resetGroqTickBudget();
   const started = Date.now();
   const now = new Date();
   const summary: TickSummary = {

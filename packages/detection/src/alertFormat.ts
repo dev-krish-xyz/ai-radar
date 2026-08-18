@@ -13,6 +13,8 @@ export interface AlertInput {
   firstDetectedAt: Date;
   evidence: EvidenceItem[];
   whyItMatters?: string;
+  whatHappensNext?: string;
+  postAngle?: string;
 }
 
 function escapeHtml(text: string): string {
@@ -112,6 +114,12 @@ export function formatTelegramAlert(input: AlertInput): string {
   }
   if (why) {
     lines.push("", `<i>${escapeHtml(why)}</i>`);
+  }
+  if (input.whatHappensNext?.trim()) {
+    lines.push(`Next: ${escapeHtml(input.whatHappensNext.trim())}`);
+  }
+  if (input.postAngle?.trim()) {
+    lines.push(`Post: ${escapeHtml(input.postAngle.trim())}`);
   }
 
   lines.push("");

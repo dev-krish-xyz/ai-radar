@@ -26,6 +26,11 @@ import {
   githubSearchAuthHeaders,
   isHfDailyPapersUrl,
   extractHfDailyPapers,
+  isHnSearchUrl,
+  buildHnRecentUrl,
+  extractHnStories,
+  isOpenRouterModelsUrl,
+  extractOpenRouterModels,
 } from "@ai-radar/crawler";
 import {
   detectSignals,
@@ -52,6 +57,9 @@ export interface ProcessResult {
 }
 
 function resolveFetchUrl(source: SourceRow): string {
+  if (isHnSearchUrl(source.url) || /hn last 4h/i.test(source.name)) {
+    return buildHnRecentUrl();
+  }
   if (isGithubSearchUrl(source.url) || /rising ai repos/i.test(source.name)) {
     return buildRisingReposSearchUrl();
   }
@@ -65,7 +73,7 @@ function looksStructuredCatalog(content: string): boolean {
   const t = content.trimStart();
   return (
     (t.startsWith("{") &&
-      (t.includes('"latest"') || t.includes('"models"') || t.includes('"repos"') || t.includes('"papers"'))) ||
+      (t.includes('"latest"') || t.includes('"models"') || t.includes('"repos"') || t.includes('"papers"') || t.includes('"stories"'))) ||
     t.startsWith("FEED_ITEMS:")
   );
 }
@@ -109,7 +117,23 @@ export async function processSource(source: SourceRow, provider: ProviderRow): P
   let extracted: string;
   let contentIsJson = isJsonContentType(fetchResult.contentType);
 
-  if (isGithubSearchUrl(fetchUrl) || /rising ai repos/i.test(source.name)) {
+  if (isHnSearchUrl(fetchUrl) || /hn last 4h/i.test(source.name)) {
+    const found = extractHnStories(body);
+    if (found) {
+      extracted = found;
+      contentIsJson = true;
+    } else {
+      extracted = extractContent(body, fetchResult.contentType, fetchUrl);
+    }
+  } else if (isOpenRouterModelsUrl(fetchUrl) || /openrouter/i.test(source.name)) {
+    const found = extractOpenRouterModels(body);
+    if (found) {
+      extracted = found;
+      contentIsJson = true;
+    } else {
+      extracted = extractContent(body, fetchResult.contentType, fetchUrl);
+    }
+  } else if (isGithubSearchUrl(fetchUrl) || /rising ai repos/i.test(source.name)) {
     const found = extractGithubSearchRepos(body);
     if (found) {
       extracted = found;
@@ -281,7 +305,7 @@ export async function processSource(source: SourceRow, provider: ProviderRow): P
 
   let allSignals = ruleSignals;
 
-  if (needsSemanticReview(lineDiff, ruleSignals.length)) {
+  if (needsSemanticReview(lineDiff, ruleSignals.length, { sourceType: source.type, newContent: extracted })) {
     const diffExcerpt = [
       ...lineDiff.added.slice(0, 40).map((l) => `+ ${l}`),
       ...lineDiff.removed.slice(0, 40).map((l) => `- ${l}`),

@@ -1,6 +1,7 @@
 import Groq from "groq-sdk";
 import { env } from "./env";
 import { EVENT_TYPES, type EventType } from "./types";
+import { canCallGroq, isGroqRateLimit, noteGroqCall, pauseGroqForTick } from "./groqBudget";
 
 export interface DiffClassificationInput {
   providerName: string;
@@ -43,13 +44,22 @@ function getClient(): Groq | null {
 export async function classifyDiffSignificance(
   input: DiffClassificationInput,
 ): Promise<DiffClassification | null> {
+  if (!canCallGroq()) {
+    console.log("[groq] classify skip budget");
+    return null;
+  }
+
   const groq = getClient();
   if (!groq) {
     console.warn("[llm] GROQ_API_KEY not set, skipping semantic classification");
     return null;
   }
 
-  const completion = await groq.chat.completions.create({
+  noteGroqCall();
+
+  let completion;
+  try {
+  completion = await groq.chat.completions.create({
     model: MODEL,
     max_tokens: 1024,
     messages: [
@@ -95,6 +105,10 @@ export async function classifyDiffSignificance(
     ],
     tool_choice: { type: "function", function: { name: TOOL_NAME } },
   });
+  } catch (err) {
+    if (isGroqRateLimit(err)) pauseGroqForTick("429 rate limit");
+    throw err;
+  }
 
   const toolCall = completion.choices[0]?.message?.tool_calls?.find(
     (t) => t.type === "function" && t.function.name === TOOL_NAME,

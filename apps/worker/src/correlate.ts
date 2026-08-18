@@ -28,6 +28,8 @@ import {
   meetsAlertThreshold,
   isAlertFresh,
   ALERT_MAX_AGE_MS,
+  enrichAlert,
+  enrichShouldSuppress,
   type EvidenceItem,
 } from "@ai-radar/shared";
 
@@ -78,7 +80,7 @@ export async function runCorrelation(): Promise<{ correlated: number; alerted: n
     const now = new Date();
     const cutoff = new Date(now.getTime() - MAX_EVENT_OPEN_MS);
     const candidateEvents = await db.query.events.findMany({
-      where: and(eq(eventsTable.providerId, signal.providerId), gte(eventsTable.firstDetectedAt, cutoff)),
+      where: gte(eventsTable.firstDetectedAt, cutoff),
     });
 
     const asEventRecords: EventRecord[] = candidateEvents.map((e) => ({
@@ -98,7 +100,11 @@ export async function runCorrelation(): Promise<{ correlated: number; alerted: n
       signal.providerId,
       asEventRecords,
       now,
+      { crossProvider: true },
     );
+    if (match && match.providerId !== signal.providerId) {
+      console.log(`[correlate] clustered signal ${signal.id} into event #${match.id} (cross-provider)`);
+    }
 
     const eventId = match ? match.id : await createEvent(provider, signal, now);
     if (match) {
@@ -417,6 +423,38 @@ async function recomputeAndMaybeAlert(
       return "suppressed";
     }
 
+    const leakish = /\b(leak|rumou?r|unreleased|codename|spotted|internal|mewfour|mythos|astra|daybreak)\b/i.test(
+      `${aggregate.title} ${aggregate.summary}`,
+    );
+    const enrich = await enrichAlert({
+      providerName,
+      eventType: aggregate.type,
+      title: aggregate.title,
+      summary: aggregate.summary,
+      entity: aggregate.entity,
+      sourceUrl: primaryUrl,
+      official,
+    });
+    if (enrich) {
+      console.log(
+        `[groq] enrich event #${eventId} social=${enrich.social} novelty=${enrich.novelty} skip=${enrich.skip} cluster=${enrich.clusterKey}`,
+      );
+      if (enrich.clusterKey) {
+        fps.push({ fingerprint: `cluster:${enrich.clusterKey}`, kind: "story" });
+        const clusterDup = await matchingFingerprint([{ fingerprint: `cluster:${enrich.clusterKey}`, kind: "story" }]);
+        if (clusterDup) {
+          await db.update(eventsTable).set({ alertedAt: now, updatedAt: now }).where(eq(eventsTable.id, eventId));
+          console.log(`[alert] clustered/deduped event #${eventId} via ${clusterDup}`);
+          return "suppressed";
+        }
+      }
+      if (enrichShouldSuppress(enrich, { official, eventType: aggregate.type, leakish })) {
+        await db.update(eventsTable).set({ status: "DISMISSED", updatedAt: now }).where(eq(eventsTable.id, eventId));
+        console.log(`[alert] groq-suppressed event #${eventId} "${aggregate.title}"`);
+        return "suppressed";
+      }
+    }
+
     const message = formatTelegramAlert({
       providerName,
       title: aggregate.title,
@@ -428,7 +466,9 @@ async function recomputeAndMaybeAlert(
       status,
       firstDetectedAt: event.firstDetectedAt,
       evidence,
-      whyItMatters: whyItMatters(quality),
+      whyItMatters: enrich?.whyItMatters ?? whyItMatters(quality),
+      whatHappensNext: enrich?.whatHappensNext,
+      postAngle: enrich?.postAngle,
     });
 
     const send = await sendTelegramMessage(message, { preview: Boolean(primaryUrl) && !isMachineUrl(primaryUrl) });

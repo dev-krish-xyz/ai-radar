@@ -69,6 +69,8 @@ packages/
    repos, and generic papers; `alert_fingerprints` persist URL/title/entity/story
    keys for 14 days so the same story is not re-paged after a restart. Telegram
    cards link the human page (`resolvePublicSourceUrl`), never the crawl API/JSON.
+   Groq is budgeted (6 calls/tick): classify only prose diffs; enrich runs after
+   the quality gate to write why/next/post-angle and a `cluster:` fingerprint.
 
 ### Confirmation
 

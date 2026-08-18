@@ -63,6 +63,36 @@ export const earlyRadar: ProviderConfig = {
       crawlIntervalMinutes: 15,
     },
     {
+      name: "HN last 4h (AI)",
+      url: "https://hn.algolia.com/api/v1/search_by_date?query=llm",
+      type: "social",
+      crawlIntervalMinutes: 10,
+    },
+    {
+      name: "Google News labs 4h",
+      url: "https://news.google.com/rss/search?q=OpenAI+OR+Anthropic+OR+Gemini+OR+Grok+OR+Claude+when:4h&hl=en-US&gl=US&ceid=US:en",
+      type: "social",
+      crawlIntervalMinutes: 15,
+    },
+    {
+      name: "Google News model/launch 4h",
+      url: "https://news.google.com/rss/search?q=(OpenAI+OR+Anthropic+OR+Grok)+(model+OR+launch+OR+pricing)+when:4h&hl=en-US&gl=US&ceid=US:en",
+      type: "social",
+      crawlIntervalMinutes: 15,
+    },
+    {
+      name: "OpenRouter model catalog",
+      url: "https://openrouter.ai/api/v1/models",
+      type: "model_catalog",
+      crawlIntervalMinutes: 15,
+    },
+    {
+      name: "arXiv cs.CL + cs.AI",
+      url: "http://export.arxiv.org/api/query?search_query=cat:cs.CL+OR+cat:cs.AI&sortBy=submittedDate&sortOrder=descending&max_results=20",
+      type: "social",
+      crawlIntervalMinutes: 30,
+    },
+    {
       name: "The Verge AI RSS",
       url: "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",
       type: "social",
