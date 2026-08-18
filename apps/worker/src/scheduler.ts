@@ -7,6 +7,7 @@ import {
 import { eq, sql } from "drizzle-orm";
 import { processSource } from "./pipeline";
 import { runCorrelation } from "./correlate";
+import { purgeStaleData } from "./purge";
 import { resetGroqTickBudget } from "@ai-radar/shared";
 
 /** Parallel fetches; host-level rate limiter still serializes same-host requests. */
@@ -110,6 +111,12 @@ export async function runTick(): Promise<TickSummary> {
     summary.alertFailed = corr.alertFailed;
   } catch (err) {
     console.error("[scheduler] correlation stage failed:", err);
+  }
+
+  try {
+    await purgeStaleData();
+  } catch (err) {
+    console.error("[scheduler] purge failed:", err);
   }
 
   summary.durationMs = Date.now() - started;

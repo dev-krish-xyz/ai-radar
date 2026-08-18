@@ -102,6 +102,13 @@ export function isAlertFresh(firstDetectedAt: Date, now: Date = new Date()): boo
   return now.getTime() - firstDetectedAt.getTime() <= ALERT_MAX_AGE_MS;
 }
 
+/** Unstarred events, orphan signals, and snapshots older than this are purged. */
+export const RETENTION_MS = 4 * 24 * 60 * 60 * 1000;
+
+export function isWithinRetention(at: Date, now: Date = new Date()): boolean {
+  return now.getTime() - at.getTime() <= RETENTION_MS;
+}
+
 export interface AlertGateOptions {
   /** True when a blog/product_page signal contributed, or the event is CONFIRMED. */
   official?: boolean;

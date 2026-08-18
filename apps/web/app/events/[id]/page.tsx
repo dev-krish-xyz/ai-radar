@@ -6,6 +6,7 @@ import { StatusBadge, ConfidenceBadge, ImportanceBadge } from "@/components/Badg
 import { Group } from "@/components/Group";
 import { formatDateTime, relativeTime } from "@/lib/time";
 import { hostOf, labelFor } from "@/lib/labels";
+import { EventActions } from "@/components/EventActions";
 
 export default async function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -52,6 +53,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
           {event.summary}
         </p>
       )}
+      <EventActions id={event.id} starred={event.starred} />
 
       <div className="mt-5 sm:mt-6">
         <Group>

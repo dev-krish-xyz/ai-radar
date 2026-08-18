@@ -25,6 +25,7 @@ export interface EventListItem {
   signalCount: number;
   alertedAt?: string | null;
   wouldAlert?: boolean;
+  starred: boolean;
 }
 
 export interface EvidenceItem {

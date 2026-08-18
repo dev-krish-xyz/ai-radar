@@ -130,6 +130,7 @@ app.get("/events", async (c) => {
     officiallyAnnouncedAt: e.officiallyAnnouncedAt,
     confirmedAt: e.confirmedAt,
     leadTimeMinutes: e.leadTimeMinutes,
+    starred: e.starred,
     signalCount: e.eventSignals.length,
     wouldAlert:
       isAlertFresh(e.firstDetectedAt) &&

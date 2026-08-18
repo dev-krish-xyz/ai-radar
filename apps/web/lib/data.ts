@@ -5,8 +5,8 @@ import {
   signals as signalsTable,
   sources as sourcesTable,
 } from "@ai-radar/db";
-import { and, desc, eq, sql } from "drizzle-orm";
-import { isAlertFresh, meetsAlertThreshold } from "@ai-radar/shared";
+import { and, desc, eq, or, gte, inArray, sql } from "drizzle-orm";
+import { isAlertFresh, meetsAlertThreshold, RETENTION_MS } from "@ai-radar/shared";
 import type { EventDetail, EventListItem, ProviderDetail, SignalListItem } from "./api";
 
 function publicSourceUrl(raw: Record<string, unknown>, crawlUrl: string, entity: string | null): string {
@@ -67,13 +67,14 @@ export async function listEvents(params?: {
   limit?: number;
 }): Promise<EventListItem[]> {
   const limit = Math.min(200, params?.limit ?? 50);
-  const conditions = [];
+  const cutoff = new Date(Date.now() - RETENTION_MS);
+  const conditions = [or(gte(eventsTable.firstDetectedAt, cutoff), eq(eventsTable.starred, true))!];
   if (params?.status) {
     conditions.push(eq(eventsTable.status, params.status as EventListItem["status"]));
   }
 
   const rows = await db.query.events.findMany({
-    where: conditions.length ? and(...conditions) : undefined,
+    where: and(...conditions),
     orderBy: [desc(eventsTable.firstDetectedAt)],
     limit,
     with: { provider: true, eventSignals: true },
@@ -95,6 +96,7 @@ export async function listEvents(params?: {
     leadTimeMinutes: e.leadTimeMinutes,
     signalCount: e.eventSignals.length,
     alertedAt: toIso(e.alertedAt),
+    starred: e.starred,
     wouldAlert:
       isAlertFresh(e.firstDetectedAt) &&
       meetsAlertThreshold(e.confidence, e.importance, { official: e.status === "CONFIRMED" }),
@@ -147,12 +149,50 @@ export async function getEvent(id: number): Promise<EventDetail | null> {
     confirmedAt: toIso(event.confirmedAt),
     leadTimeMinutes: event.leadTimeMinutes,
     alertedAt: toIso(event.alertedAt),
+    starred: event.starred,
     evidence,
   };
 }
 
+export async function setEventStarred(id: number, starred: boolean): Promise<boolean> {
+  const rows = await db
+    .update(eventsTable)
+    .set({
+      starred,
+      starredAt: starred ? new Date() : null,
+      updatedAt: new Date(),
+    })
+    .where(eq(eventsTable.id, id))
+    .returning({ id: eventsTable.id });
+  return rows.length > 0;
+}
+
+export async function deleteEventById(id: number): Promise<boolean> {
+  const links = await db.query.eventSignals.findMany({
+    where: eq(eventSignalsTable.eventId, id),
+  });
+  const signalIds = links.map((l) => l.signalId);
+
+  const rows = await db.delete(eventsTable).where(eq(eventsTable.id, id)).returning({ id: eventsTable.id });
+  if (rows.length === 0) return false;
+
+  if (signalIds.length > 0) {
+    await db.delete(signalsTable).where(inArray(signalsTable.id, signalIds));
+  }
+  return true;
+}
+
 export async function listSignals(limit = 100): Promise<SignalListItem[]> {
+  const cutoff = new Date(Date.now() - RETENTION_MS);
   const rows = await db.query.signals.findMany({
+    where: or(
+      gte(signalsTable.detectedAt, cutoff),
+      sql`${signalsTable.id} IN (
+        SELECT ${eventSignalsTable.signalId} FROM ${eventSignalsTable}
+        INNER JOIN ${eventsTable} ON ${eventsTable.id} = ${eventSignalsTable.eventId}
+        WHERE ${eventsTable.starred} = true
+      )`,
+    ),
     orderBy: [desc(signalsTable.detectedAt)],
     limit: Math.min(200, limit),
     with: { provider: true, source: true },

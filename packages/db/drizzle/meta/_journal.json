@@ -22,6 +22,13 @@
       "when": 1787056800000,
       "tag": "0002_alert_fingerprints",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787064000000,
+      "tag": "0003_event_stars_retention",
+      "breakpoints": true
     }
   ]
 }

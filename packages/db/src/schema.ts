@@ -124,6 +124,8 @@ export const events = pgTable(
     confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
     leadTimeMinutes: integer("lead_time_minutes"),
     alertedAt: timestamp("alerted_at", { withTimezone: true }),
+    starred: boolean("starred").notNull().default(false),
+    starredAt: timestamp("starred_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -131,6 +133,7 @@ export const events = pgTable(
     index("events_status_idx").on(t.status),
     index("events_provider_idx").on(t.providerId),
     index("events_first_detected_idx").on(t.firstDetectedAt),
+    index("events_starred_idx").on(t.starred),
   ],
 );
 
