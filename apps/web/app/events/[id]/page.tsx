@@ -35,7 +35,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
   });
 
   return (
-    <div className="min-w-0">
+    <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain pb-6 [-webkit-overflow-scrolling:touch]">
       <Link
         href="/"
         className="mb-3 inline-flex min-h-8 items-center text-[13px] text-accent-text sm:mb-4"

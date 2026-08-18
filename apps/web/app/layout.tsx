@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Nav } from "@/components/Nav";
+import { AppChrome } from "@/components/Nav";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -36,10 +36,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
       <body>
-        <Nav />
-        <main className="mx-auto w-full max-w-[680px] px-4 pb-10 pt-6 sm:px-5 sm:pb-16 sm:pt-8">
-          {children}
-        </main>
+        <AppChrome>{children}</AppChrome>
       </body>
     </html>
   );

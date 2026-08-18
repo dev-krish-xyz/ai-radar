@@ -7,7 +7,7 @@ export default async function ProvidersPage() {
   const providers = await api.providers().catch(() => []);
 
   return (
-    <div className="min-w-0">
+    <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain pb-6 [-webkit-overflow-scrolling:touch]">
       <PageHeader title="Sources" subtitle="What the crawler watches." />
       <div className="flex flex-col gap-5">
         {providers.map((p) => (

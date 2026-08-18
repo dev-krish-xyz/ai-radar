@@ -7,7 +7,7 @@ export default async function SignalsPage() {
   const signals = await api.signals({ limit: 100 }).catch(() => []);
 
   return (
-    <div className="min-w-0">
+    <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain pb-6 [-webkit-overflow-scrolling:touch]">
       <PageHeader title="Signals" subtitle="Raw detections before they become events." />
       {signals.length === 0 ? (
         <p className="py-10 text-center text-[13px] text-text-secondary">No signals yet.</p>

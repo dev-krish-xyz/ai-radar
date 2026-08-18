@@ -79,7 +79,6 @@
 
 html {
   color-scheme: light;
-  overflow-x: clip;
 }
 
 [data-theme="dark"] {
@@ -90,6 +89,12 @@ html {
   border-color: var(--border);
 }
 
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
   background: var(--bg);
   color: var(--text);
@@ -97,17 +102,10 @@ body {
   font-size: 13px;
   line-height: 1.38462;
   letter-spacing: -0.006em;
-  overflow-x: clip;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
   -webkit-tap-highlight-color: transparent;
-}
-
-@media (max-width: 639px) {
-  body {
-    padding-bottom: calc(52px + env(safe-area-inset-bottom, 0px));
-  }
 }
 
 button,

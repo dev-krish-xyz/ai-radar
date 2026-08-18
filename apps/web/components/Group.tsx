@@ -18,7 +18,7 @@ export function PageHeader({
   trailing?: ReactNode;
 }) {
   return (
-    <div className="mb-4 flex flex-col gap-1 sm:mb-5 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+    <div className="mb-3 flex flex-col gap-1 sm:mb-4 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
       <div className="min-w-0">
         <h1 className="text-[22px] font-semibold leading-tight tracking-[-0.022em] text-text">
           {title}
