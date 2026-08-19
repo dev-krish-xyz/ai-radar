@@ -76,12 +76,12 @@ export const ALERT_CONFIDENCE_THRESHOLD = 60;
 export const ALERT_IMPORTANCE_THRESHOLD = 6;
 
 /**
- * Early single-signal bar. Max deterministic weight for a single signal type is 40
- * (new_model_id), so a hard conf≥60 gate made it *impossible* to alert on a lone
- * model launch / product signal — exactly the early edge this system exists for.
+ * Early single-signal bar. product_launch is weighted 30 and NEW_PRODUCT importance
+ * is 9 — a lone Google News / catalog launch must clear this or it never Telegrams.
+ * new_model_id is 40 and still sails over.
  */
 export const ALERT_EARLY_IMPORTANCE_MIN = 8;
-export const ALERT_EARLY_CONFIDENCE_MIN = 35;
+export const ALERT_EARLY_CONFIDENCE_MIN = 30;
 
 /** Mid-tier single-signal bar (pricing, deprecation, availability with solid weight). */
 export const ALERT_SOLID_CONFIDENCE_MIN = 40;

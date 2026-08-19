@@ -492,7 +492,7 @@ async function recomputeAndMaybeAlert(
   if (!meetsAlertBar && !event.alertedAt) {
     console.log(
       `[alert] below threshold event #${eventId} conf=${aggregate.confidence} imp=${aggregate.importance} official=${official} ` +
-        `(need conf≥60&imp≥6 OR imp≥8&conf≥35 OR imp≥6&conf≥40 OR official&imp≥6&conf≥15)`,
+        `(need conf≥60&imp≥6 OR imp≥8&conf≥30 OR imp≥6&conf≥40 OR official&imp≥6&conf≥15)`,
     );
   }
 

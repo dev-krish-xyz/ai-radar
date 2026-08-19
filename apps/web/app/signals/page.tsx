@@ -4,7 +4,7 @@ import { relativeTime } from "@/lib/time";
 import { labelFor } from "@/lib/labels";
 
 export default async function SignalsPage() {
-  const signals = await api.signals({ limit: 100 }).catch(() => []);
+  const signals = await api.signals({ limit: 100 });
 
   return (
     <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain pb-6 [-webkit-overflow-scrolling:touch]">
@@ -15,9 +15,12 @@ export default async function SignalsPage() {
         <Group>
           <div className="divide-y divide-border">
             {signals.map((s) => (
-              <div
+              <a
                 key={s.id}
-                className="flex items-start justify-between gap-3 px-3 py-3 sm:gap-4 sm:px-3.5 sm:py-2.5"
+                href={s.source.url}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-start justify-between gap-3 px-3 py-3 sm:gap-4 sm:px-3.5 sm:py-2.5 sm:hover:bg-bg-hover"
               >
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[11px] text-text-tertiary">
@@ -34,7 +37,7 @@ export default async function SignalsPage() {
                     {s.correlated ? "Linked" : "Open"}
                   </div>
                 </div>
-              </div>
+              </a>
             ))}
           </div>
         </Group>

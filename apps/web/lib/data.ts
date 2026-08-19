@@ -185,30 +185,31 @@ export async function deleteEventById(id: number): Promise<boolean> {
 export async function listSignals(limit = 100): Promise<SignalListItem[]> {
   const cutoff = new Date(Date.now() - RETENTION_MS);
   const rows = await db.query.signals.findMany({
-    where: or(
-      gte(signalsTable.detectedAt, cutoff),
-      sql`${signalsTable.id} IN (
-        SELECT ${eventSignalsTable.signalId} FROM ${eventSignalsTable}
-        INNER JOIN ${eventsTable} ON ${eventsTable.id} = ${eventSignalsTable.eventId}
-        WHERE ${eventsTable.starred} = true
-      )`,
-    ),
+    where: gte(signalsTable.detectedAt, cutoff),
     orderBy: [desc(signalsTable.detectedAt)],
     limit: Math.min(200, limit),
     with: { provider: true, source: true },
   });
-  return rows.map((s) => ({
-    id: s.id,
-    provider: { id: s.provider.id, name: s.provider.name, slug: s.provider.slug },
-    source: { id: s.source.id, name: s.source.name, url: s.source.url, type: s.source.type },
-    signalType: s.signalType,
-    entity: s.entity,
-    title: s.title,
-    description: s.description,
-    confidenceContribution: s.confidenceContribution,
-    detectedAt: toIso(s.detectedAt)!,
-    correlated: s.correlated,
-  }));
+  return rows.map((s) => {
+    const raw = (s.evidence ?? {}) as Record<string, unknown>;
+    return {
+      id: s.id,
+      provider: { id: s.provider.id, name: s.provider.name, slug: s.provider.slug },
+      source: {
+        id: s.source.id,
+        name: s.source.name,
+        url: publicSourceUrl(raw, s.source.url, s.entity),
+        type: s.source.type,
+      },
+      signalType: s.signalType,
+      entity: s.entity,
+      title: s.title,
+      description: s.description,
+      confidenceContribution: s.confidenceContribution,
+      detectedAt: toIso(s.detectedAt)!,
+      correlated: s.correlated,
+    };
+  });
 }
 
 export async function listProviders(): Promise<ProviderDetail[]> {

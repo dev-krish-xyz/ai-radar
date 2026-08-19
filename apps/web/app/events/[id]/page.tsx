@@ -77,7 +77,13 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
       <Group>
         <div className="divide-y divide-border">
           {event.evidence.map((ev) => (
-            <div key={ev.id} className="px-3 py-3 sm:px-3.5">
+            <a
+              key={ev.id}
+              href={ev.source.url}
+              target="_blank"
+              rel="noreferrer"
+              className="block px-3 py-3 sm:px-3.5 sm:hover:bg-bg-hover active:bg-bg-active"
+            >
               <div className="flex items-start justify-between gap-3 sm:gap-4">
                 <div className="min-w-0 flex-1">
                   <div className="text-[11px] text-text-tertiary">
@@ -95,16 +101,11 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
                   {relativeTime(ev.detectedAt)}
                 </div>
               </div>
-              <a
-                href={ev.source.url}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-1.5 inline-block max-w-full break-words text-[12px] text-accent-text"
-              >
+              <div className="mt-1.5 max-w-full break-words text-[12px] text-accent-text">
                 {ev.source.name}
                 <span className="text-text-tertiary"> · {hostOf(ev.source.url)}</span>
-              </a>
-            </div>
+              </div>
+            </a>
           ))}
         </div>
       </Group>
